@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Platform Example – Deeply Nested Schema",
+  "description": "Demonstrates objects, arrays of objects, arrays of primitives, and required fields at multiple depths.",
+  "type": "object",
+  "properties": {
+    "username": { "type": "string", "title": "Username" },
+    "organization": { "type": "string", "title": "Organization" },
+    "role": {
+      "type": "string",
+      "title": "Role",
+      "enum": ["Developer", "Tester", "Lead", "Manager"]
+    },
+    "title": { "type": "string", "title": "Job Title" },
+    "completed": { "type": "boolean", "title": "Completed" },
+
+    "tags": {
+      "type": "array",
+      "title": "Tags",
+      "items": { "type": "string" }
+    },
+
+    "user": {
+      "type": "object",
+      "title": "User",
+      "properties": {
+        "profile": {
+          "type": "object",
+          "title": "Profile",
+          "properties": {
+            "age": { "type": "integer", "title": "Age" },
+            "active": { "type": "boolean", "title": "Active" },
+            "addresses": {
+              "type": "array",
+              "title": "Addresses",
+              "items": {
+                "type": "object",
+                "title": "Address",
+                "properties": {
+                  "type": { "type": "string", "enum": ["home", "work"], "title": "Type" },
+                  "street": { "type": "string", "title": "Street" },
+                  "city": { "type": "string", "title": "City" },
+                  "lines": {
+                    "type": "array",
+                    "title": "Address Lines",
+                    "items": { "type": "string" }
+                  },
+                  "geo": {
+                    "type": "object",
+                    "title": "Geo",
+                    "properties": {
+                      "lat": { "type": "number", "title": "Latitude" },
+                      "lng": { "type": "number", "title": "Longitude" }
+                    },
+                    "required": ["lat", "lng"]
+                  }
+                },
+                "required": ["type", "street", "city"]
+              }
+            }
+          },
+          "required": ["age", "active"]
+        }
+      },
+      "required": ["profile"]
+    },
+
+    "projects": {
+      "type": "array",
+      "title": "Projects",
+      "items": {
+        "type": "object",
+        "title": "Project",
+        "properties": {
+          "name": { "type": "string", "title": "Project Name" },
+          "status": { "type": "string", "enum": ["active", "paused", "done"], "title": "Status" },
+          "members": {
+            "type": "array",
+            "title": "Members",
+            "items": {
+              "type": "object",
+              "title": "Member",
+              "properties": {
+                "name": { "type": "string", "title": "Name" },
+                "lead": { "type": "boolean", "title": "Is Lead" },
+                "skills": { "type": "array", "title": "Skills", "items": { "type": "string" } }
+              },
+              "required": ["name"]
+            }
+          }
+        },
+        "required": ["name", "status"]
+      }
+    },
+
+    "preferences": {
+      "type": "object",
+      "title": "Preferences",
+      "properties": {
+        "theme": { "type": "string", "enum": ["light", "dark", "system"], "title": "Theme" },
+        "languages": { "type": "array", "title": "Languages", "items": { "type": "string" } },
+        "notifications": {
+          "type": "object",
+          "title": "Notifications",
+          "properties": {
+            "email": { "type": "boolean", "title": "Email" },
+            "sms": { "type": "boolean", "title": "SMS" }
+          },
+          "required": ["email"]
+        }
+      }
+    }
+  },
+  "required": [
+    "username",
+    "organization",
+    "role",
+    "completed",
+    "user",
+    "projects"
+  ]
+}
