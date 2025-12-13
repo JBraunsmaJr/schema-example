@@ -1,5 +1,5 @@
 import './App.css'
-import React, {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {
   Box,
   Container,
@@ -17,7 +17,8 @@ import {
   ListItemText,
   Divider,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  type SelectChangeEvent
 } from "@mui/material";
 import testSchema from "./test-schema.json"
 import { DynamicForm } from "./schema/DynamicForm"
@@ -28,24 +29,26 @@ function App() {
   type ViewMode = 'form' | 'erd'
   const [view, setView] = useState<ViewMode>('form')
   type Mode = 'light' | 'dark' | 'system'
-  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('themeMode') as Mode) || 'system')
+  function initMode(): Mode { return (localStorage.getItem('themeMode') as Mode) || 'system' }
+  const [mode, setMode] = useState<Mode>(initMode)
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-  useEffect(() => {
+  useEffect(function () {
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    const listener = () => forceUpdateTick(t => t + 1)
+    function incTick(t: number) { return t + 1 }
+    function listener() { forceUpdateTick(incTick) }
     mql.addEventListener?.('change', listener)
-    return () => mql.removeEventListener?.('change', listener)
+    return function cleanup() { mql.removeEventListener?.('change', listener) }
   }, [])
   const [tick, forceUpdateTick] = useState(0) // trigger re-eval on system change
-  const resolvedPaletteMode = useMemo<'light' | 'dark'>(() => {
+  const resolvedPaletteMode = useMemo<'light' | 'dark'>(function () {
     if (mode === 'system') return prefersDark ? 'dark' : 'light'
     return mode
   }, [mode, prefersDark, tick])
-  useEffect(() => {
+  useEffect(function () {
     localStorage.setItem('themeMode', mode)
   }, [mode])
 
-  const theme = useMemo(() => createTheme({
+  const theme = useMemo(function () { return createTheme({
     palette: {
       mode: resolvedPaletteMode,
       primary: {
@@ -67,14 +70,14 @@ function App() {
       MuiPaper: { styleOverrides: { root: { borderRadius: 12 } } },
       MuiAccordion: { styleOverrides: { root: { borderRadius: 12, backgroundImage: 'none' } } },
     }
-  }), [resolvedPaletteMode])
+  }) }, [resolvedPaletteMode])
 
   // Build a Table of Contents that reflects what currently exists/is filled in the form
   type TocItem = { id: string, title: string, depth: number }
 
-  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+  function isRecord(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v) }
 
-  const hasAnyValue = (schemaNode: SchemaField | JsonSchema, dataNode: unknown): boolean => {
+  function hasAnyValue(schemaNode: SchemaField | JsonSchema, dataNode: unknown): boolean {
     const t = (schemaNode as SchemaField).type ?? 'object'
     switch (t) {
       case 'string':
@@ -91,7 +94,7 @@ function App() {
         const props = (schemaNode as { properties?: Record<string, SchemaField> }).properties
         if (!props) return Object.keys(dataNode).length > 0
         for (const key of Object.keys(props)) {
-          if (hasAnyValue(props[key], dataNode[key])) return true
+          if (hasAnyValue(props[key], (dataNode as Record<string, unknown>)[key])) return true
         }
         return false
       }
@@ -100,17 +103,17 @@ function App() {
     }
   }
 
-  const getTitleForPath = (schemaNode: SchemaField | JsonSchema, path: string[]): string => {
+  function getTitleForPath(schemaNode: SchemaField | JsonSchema, path: string[]): string {
     return (schemaNode as SchemaField).title || (path[path.length - 1] ?? 'Section')
   }
 
-  const buildTocExisting = (
+  function buildTocExisting(
     schemaNode: SchemaField | JsonSchema,
     dataNode: unknown,
     basePath: string[] = [],
     depth = 0,
     skipSelf = false
-  ): TocItem[] => {
+  ): TocItem[] {
     const items: TocItem[] = []
     const t = (schemaNode as SchemaField).type ?? 'object'
     const pathStr = basePath.join('.')
@@ -120,7 +123,7 @@ function App() {
     if (t === 'object') {
       const props = (schemaNode as { properties?: Record<string, SchemaField> }).properties
       if (props) {
-        const record = isRecord(dataNode) ? dataNode : {}
+        const record = isRecord(dataNode) ? (dataNode as Record<string, unknown>) : {}
         for (const key of Object.keys(props)) {
           const childSchema = props[key]
           const childData = record[key]
@@ -128,16 +131,17 @@ function App() {
         }
       }
     } else if (t === 'array') {
-      const itemsSchema = (schemaNode as SchemaField).items
+      const itemsSchema = (schemaNode as SchemaField).items as SchemaField | undefined
       if (itemsSchema && Array.isArray(dataNode)) {
         if (itemsSchema.type === 'object') {
-          dataNode.forEach((it, idx) => {
+          for (let idx = 0; idx < (dataNode as unknown[]).length; idx++) {
+            const it = (dataNode as unknown[])[idx]
             if (hasAnyValue(itemsSchema, it)) {
               const itemPath = [...basePath, String(idx)]
               items.push({ id: `section-${itemPath.join('.')}`, title: `Item ${idx + 1}`, depth: depth + 1 })
               items.push(...buildTocExisting(itemsSchema, it, itemPath, depth + 2, true))
             }
-          })
+          }
         }
       }
     }
@@ -145,17 +149,17 @@ function App() {
   }
 
   const [formData, setFormData] = useState<Record<string, unknown>>({})
-  const toc = useMemo(() => buildTocExisting(testSchema as JsonSchema, formData, [], 0), [formData])
+  const toc = useMemo(function () { return buildTocExisting(testSchema as JsonSchema, formData, [], 0) }, [formData])
 
   // Error list synced from DynamicForm
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const handleFormSubmit = (data: Record<string, unknown>) => {
+  function handleFormSubmit(data: Record<string, unknown>) {
     console.log("Form Submitted", data)
     alert(JSON.stringify(data, null, 2))
   }
 
-  const scrollToId = (id: string) => {
+  function scrollToId(id: string) {
     const el = document.getElementById(id)
     if (!el) return
     // expand parent accordion if collapsed
@@ -169,7 +173,27 @@ function App() {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const handleErrorClick = (path: string) => scrollToId(`section-${path}`)
+  function handleErrorClick(path: string) { scrollToId(`section-${path}`) }
+
+
+  // Navigate from ERD to a specific form section/field
+  function navigateToPathFromERD(path: string) {
+    // switch to form view then scroll after render tick
+    setView('form')
+    // small timeout to allow layout/accordions to mount
+    function delayedScroll() { scrollToId(`section-${path}`) }
+    setTimeout(delayedScroll, 0)
+  }
+
+  function handleViewChange(_: unknown, val: ViewMode | null) { if (val) setView(val) }
+  function handleModeChange(e: SelectChangeEvent) { setMode(e.target.value as Mode) }
+
+  function createTocClick(id: string) {
+    function onClick() { scrollToId(id) }
+    return onClick
+  }
+
+  // No ERD export handle (feature removed)
 
   return (
     <ThemeProvider theme={theme}>
@@ -182,11 +206,13 @@ function App() {
             <Paper sx={{ position: 'sticky', top: 16, p: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>Sections</Typography>
               <List dense>
-                {toc.map((t) => (
-                  <ListItemButton key={t.id} sx={{ pl: 1 + t.depth * 2 }} onClick={() => scrollToId(t.id)}>
-                    <ListItemText primaryTypographyProps={{ noWrap: true }} primary={t.title} />
-                  </ListItemButton>
-                ))}
+                {toc.map(function (t) {
+                  return (
+                    <ListItemButton key={t.id} sx={{ pl: 1 + t.depth * 2 }} onClick={createTocClick(t.id)}>
+                      <ListItemText primaryTypographyProps={{ noWrap: true }} primary={t.title} />
+                    </ListItemButton>
+                  )
+                })}
               </List>
             </Paper>
           </Box>
@@ -201,14 +227,14 @@ function App() {
                   color="primary"
                   exclusive
                   value={view}
-                  onChange={(_, val: ViewMode | null) => { if (val) setView(val) }}
+                  onChange={handleViewChange}
                 >
                   <ToggleButton value="form">Form</ToggleButton>
                   <ToggleButton value="erd">ERD</ToggleButton>
                 </ToggleButtonGroup>
                 <FormControl size="small" sx={{ minWidth: 160 }}>
                   <InputLabel id="theme-mode-label">Theme</InputLabel>
-                  <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+                  <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={handleModeChange}>
                     <MenuItem value="system">System</MenuItem>
                     <MenuItem value="light">Light</MenuItem>
                     <MenuItem value="dark">Dark</MenuItem>
@@ -220,12 +246,16 @@ function App() {
             {view === 'form' ? (
               <DynamicForm
                 onSubmit={handleFormSubmit}
-                schema={testSchema}
+                schema={testSchema as JsonSchema}
                 onErrorsChange={setErrors}
                 onDataChange={setFormData}
               />
             ) : (
-              <SchemaERD schema={testSchema as JsonSchema} data={formData} />
+              <SchemaERD
+                schema={testSchema as JsonSchema}
+                data={formData}
+                onNavigate={navigateToPathFromERD}
+              />
             )}
           </Box>
 
@@ -238,11 +268,14 @@ function App() {
                 <Typography variant="body2" color="text.secondary">No errors</Typography>
               ) : (
                 <List dense>
-                  {Object.entries(errors).map(([path, msg]) => (
-                    <ListItemButton key={path} onClick={() => handleErrorClick(path)}>
-                      <ListItemText primary={msg} secondary={path} />
-                    </ListItemButton>
-                  ))}
+                  {Object.entries(errors).map(function ([path, msg]) {
+                    function onClick() { handleErrorClick(path) }
+                    return (
+                      <ListItemButton key={path} onClick={onClick}>
+                        <ListItemText primary={msg} secondary={path} />
+                      </ListItemButton>
+                    )
+                  })}
                 </List>
               )}
             </Paper>
@@ -250,7 +283,7 @@ function App() {
           </Box>
         </Container>
       ) : (
-        <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ width: '100%', maxWidth: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', overflowX: 'hidden' }}>
           <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6">Entity Relationship Diagram</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -259,14 +292,14 @@ function App() {
                 color="primary"
                 exclusive
                 value={view}
-                onChange={(_, val: ViewMode | null) => { if (val) setView(val) }}
+                onChange={handleViewChange}
               >
                 <ToggleButton value="form">Form</ToggleButton>
                 <ToggleButton value="erd">ERD</ToggleButton>
               </ToggleButtonGroup>
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <InputLabel id="theme-mode-label">Theme</InputLabel>
-                <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+                <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={handleModeChange}>
                   <MenuItem value="system">System</MenuItem>
                   <MenuItem value="light">Light</MenuItem>
                   <MenuItem value="dark">Dark</MenuItem>
@@ -274,10 +307,14 @@ function App() {
               </FormControl>
             </Box>
           </Box>
-          <Box sx={{ flex: 1, minHeight: 0 }}>
+          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
             {/* Ensure the ERD fills the remaining viewport height */}
-            <Box sx={{ height: '100%', width: '100%' }}>
-              <SchemaERD schema={testSchema as JsonSchema} data={formData} />
+            <Box sx={{ height: '100%', width: '100%', overflow: 'hidden' }}>
+              <SchemaERD
+                schema={testSchema as JsonSchema}
+                data={formData}
+                onNavigate={navigateToPathFromERD}
+              />
             </Box>
           </Box>
         </Box>

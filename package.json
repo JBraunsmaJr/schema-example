@@ -15,9 +15,12 @@
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "dagre": "^0.8.5",
+    "html-to-image": "^1.11.11",
+    "html2canvas": "^1.4.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "reactflow": "^11.10.2"
+    "reactflow": "^11.10.2",
+    "jspdf": "^2.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

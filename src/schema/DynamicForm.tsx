@@ -136,7 +136,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
     }
 
     const setPathValue = useCallback((path: (string | number)[], value: unknown) => {
-        setFormData(prev => setValueAtPath(prev, path, value))
+        setFormData(prev => setValueAtPath(prev, path, value) as Record<string, unknown>)
     }, [])
 
     const clearErrorFor = useCallback((path: (string | number)[]) => {
@@ -150,7 +150,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
         })
     }, [onErrorsChange])
 
-    const handleSelectChange = useCallback((path: (string | number)[]) => (event: SelectChangeEvent) => {
+    const handleSelectChange = useCallback((path: (string | number)[]) => (event: SelectChangeEvent, _child?: unknown) => {
         setPathValue(path, event.target.value)
         clearErrorFor(path)
     }, [setPathValue, clearErrorFor])
@@ -297,7 +297,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
             const arr: unknown[] = Array.isArray(value) ? value : []
             const addItem = () => {
                 const newItem = defaultForSchema(field.items!)
-                setFormData(prev => setValueAtPath(prev, path, [...arr, newItem]))
+                setFormData(prev => setValueAtPath(prev, path, [...arr, newItem]) as Record<string, unknown>)
                 clearErrorFor(path)
             }
             // Prune and reindex errors when removing an array item so the Errors TOC stays in sync
@@ -336,7 +336,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
                 })
             }
             const removeItem = (idx: number) => {
-                setFormData(prev => removeValueAtPath(prev, [...path, idx]))
+                setFormData(prev => removeValueAtPath(prev, [...path, idx]) as Record<string, unknown>)
                 pruneErrorsOnArrayRemoval(path, idx)
             }
             return (
@@ -348,7 +348,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
                         </IconButton>
                     </Box>
                     <Box>
-                        {arr.map((itemVal, idx) => (
+                        {arr.map(( _itemVal, idx) => (
                             <Box key={joinPath([...path, idx])} sx={{ mb: 1 }}>
                                 {field.items!.type === 'object' ? (
                                     <Accordion id={`section-${joinPath([...path, idx])}`} disableGutters defaultExpanded={false}>

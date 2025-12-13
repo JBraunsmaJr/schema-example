@@ -7,6 +7,20 @@ const joinPath = (path: (string | number)[]) => path.map(p => String(p)).join('.
 
 const itemPathToken = '[]'
 
+function toAttributeType(t: SchemaField['type'] | undefined): Attribute['type'] {
+  switch (t) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'integer':
+    case 'array':
+    case 'object':
+      return t
+    default:
+      return 'object'
+  }
+}
+
 const hasAnyValue = (schemaNode: SchemaField | JsonSchema, dataNode: unknown): boolean => {
   const t = (schemaNode as SchemaField).type ?? 'object'
   switch (t) {
@@ -54,9 +68,22 @@ export function buildGraph(schema: JsonSchema, data: Record<string, unknown>): S
       if (child.type === 'object') continue
       if (child.type === 'array' && child.items && child.items.type === 'object') continue
       if (child.type === 'array') {
-        attributes.push({ name: key, type: child.items?.type ?? 'array', isArray: true, required: requiredList.includes(key), enumValues: child.items?.enum })
+        attributes.push({
+          name: key,
+          type: child.items ? toAttributeType(child.items.type) : 'array',
+          isArray: true,
+          required: requiredList.includes(key),
+          enumValues: child.items?.enum,
+          path: joinPath([...path, key])
+        })
       } else {
-        attributes.push({ name: key, type: child.type, required: requiredList.includes(key), enumValues: child.enum })
+        attributes.push({
+          name: key,
+          type: toAttributeType(child.type),
+          required: requiredList.includes(key),
+          enumValues: child.enum,
+          path: joinPath([...path, key])
+        })
       }
     }
 

@@ -8,6 +8,7 @@ export interface EntityNodeData {
   attributes: Attribute[]
   requiredCount: number
   exists: boolean
+  onNavigate?: (path: string) => void
 }
 
 export interface Attribute {
@@ -16,6 +17,7 @@ export interface Attribute {
   isArray?: boolean
   required?: boolean
   enumValues?: Array<string | number>
+  path?: string
 }
 
 export interface RelationEdgeData {
