@@ -22,7 +22,6 @@ import { DynamicForm } from "./schema/DynamicForm"
 import type { JsonSchema, SchemaField } from "./schema/types"
 
 function App() {
-  // theming
   type Mode = 'light' | 'dark' | 'system'
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('themeMode') as Mode) || 'system')
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -50,7 +49,6 @@ function App() {
       secondary: {
         main: resolvedPaletteMode === 'dark' ? '#f2a7c2' : '#ad1457'
       },
-      // Important: only specify background in dark mode. In light mode, let MUI provide defaults.
       ...(resolvedPaletteMode === 'dark'
         ? {
             background: {
@@ -80,7 +78,6 @@ function App() {
       case 'integer':
         return typeof dataNode === 'number' && !Number.isNaN(dataNode)
       case 'boolean':
-        // presence of a boolean value (true/false) counts as existing if explicitly set
         return typeof dataNode === 'boolean'
       case 'array':
         return Array.isArray(dataNode) && dataNode.length > 0
@@ -112,8 +109,6 @@ function App() {
     const items: TocItem[] = []
     const t = (schemaNode as SchemaField).type ?? 'object'
     const pathStr = basePath.join('.')
-    // Always include object/array sections once they exist in the schema (so navigation isn't empty),
-    // but only traverse into children based on actual data presence to keep the TOC compact.
     if (!skipSelf && pathStr && (t === 'object' || t === 'array')) {
       items.push({ id: `section-${pathStr}`, title: getTitleForPath(schemaNode, basePath), depth })
     }
@@ -124,20 +119,17 @@ function App() {
         for (const key of Object.keys(props)) {
           const childSchema = props[key]
           const childData = record[key]
-          // Always include a section entry for each object/array child so the TOC isn't empty at start.
           items.push(...buildTocExisting(childSchema, childData, [...basePath, key], depth + 1))
         }
       }
     } else if (t === 'array') {
       const itemsSchema = (schemaNode as SchemaField).items
       if (itemsSchema && Array.isArray(dataNode)) {
-        // Keep the array section already added above; include entries for existing object items
         if (itemsSchema.type === 'object') {
           dataNode.forEach((it, idx) => {
             if (hasAnyValue(itemsSchema, it)) {
               const itemPath = [...basePath, String(idx)]
               items.push({ id: `section-${itemPath.join('.')}`, title: `Item ${idx + 1}`, depth: depth + 1 })
-              // Avoid duplicating the item node itself; only include its children
               items.push(...buildTocExisting(itemsSchema, it, itemPath, depth + 2, true))
             }
           })

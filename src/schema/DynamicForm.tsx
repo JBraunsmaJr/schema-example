@@ -27,15 +27,10 @@ interface DynamicFormProps {
     schema: JsonSchema
     initialData?: Record<string, unknown>
     onSubmit: (data: Record<string, unknown>) => void
-    // Optional: report current validation errors (keyed by dot path) to parent for TOC/error navigation
     onErrorsChange?: (errors: Record<string, string>) => void
-    // Optional: report current form data to parent so TOC can reflect what exists on screen
     onDataChange?: (data: Record<string, unknown>) => void
 }
 
-// Move DebouncedTextField to module scope so it is not re-declared per render
-// This prevents any chance of hook order issues related to redefining components during parent renders,
-// especially when array lengths change under StrictMode double-invocation.
 const DebouncedTextField: React.FC<{
     label: string
     type: 'text' | 'number'
@@ -47,7 +42,6 @@ const DebouncedTextField: React.FC<{
 }> = React.memo(({ label, type, value, error, helperText, required, onCommit }) => {
     const [local, setLocal] = useState<string | number>(value)
 
-    // keep local in sync when external value changes from elsewhere
     useEffect(() => {
         setLocal(value)
     }, [value])
@@ -141,7 +135,6 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
         return base
     }
 
-    // Stable helpers for updates and error clearing
     const setPathValue = useCallback((path: (string | number)[], value: unknown) => {
         setFormData(prev => setValueAtPath(prev, path, value))
     }, [])
@@ -193,7 +186,6 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
         }
     }
 
-    // Validation
     const validate = (
         schemaNode: SchemaField | JsonSchema,
         dataNode: unknown,
@@ -246,8 +238,6 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
         }
         onSubmit(formData)
     }
-
-    // Debounced input moved to module scope above
 
     // Notify parent when data changes so TOC can reflect existing/filled sections
     useEffect(() => {
@@ -365,11 +355,6 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
                                         <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
                                             <Typography>Item {idx + 1}</Typography>
                                             <Box sx={{ ml: 'auto' }}>
-                                                {/**
-                                                 * AccordionSummary renders a <button> internally. Nesting a button
-                                                 * (IconButton) inside it causes the runtime warning. Render the
-                                                 * IconButton as a non-button element while preserving styling.
-                                                 */}
                                                 <IconButton component="span" color="error" size="small" onClick={(e) => { e.stopPropagation(); removeItem(idx) }} aria-label="remove">
                                                     <DeleteIcon fontSize="small" />
                                                 </IconButton>
