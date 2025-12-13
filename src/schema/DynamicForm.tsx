@@ -27,6 +27,10 @@ interface DynamicFormProps {
     schema: JsonSchema
     initialData?: Record<string, unknown>
     onSubmit: (data: Record<string, unknown>) => void
+    // Optional: report current validation errors (keyed by dot path) to parent for TOC/error navigation
+    onErrorsChange?: (errors: Record<string, string>) => void
+    // Optional: report current form data to parent so TOC can reflect what exists on screen
+    onDataChange?: (data: Record<string, unknown>) => void
 }
 
 // Move DebouncedTextField to module scope so it is not re-declared per render
@@ -72,7 +76,7 @@ const DebouncedTextField: React.FC<{
     )
 })
 
-export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
+export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDataChange}: DynamicFormProps) {
     const [ formData, setFormData ] = useState<Record<string, unknown>>(initialData ?? {})
     const [ errors, setErrors ] = useState<Record<string, string>>({})
 
@@ -148,9 +152,10 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
             if (!prev[p]) return prev
             const ne = { ...prev }
             delete ne[p]
+            if (onErrorsChange) onErrorsChange(ne)
             return ne
         })
-    }, [])
+    }, [onErrorsChange])
 
     const handleSelectChange = useCallback((path: (string | number)[]) => (event: SelectChangeEvent) => {
         setPathValue(path, event.target.value)
@@ -197,16 +202,20 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
     ): Record<string, string> => {
         const nodeType = (schemaNode as SchemaField).type ?? 'object'
         const required = (schemaNode as { required?: string[] }).required
-        if (nodeType === 'object' && required && isRecord(dataNode)) {
-            required.forEach((k) => {
-                const v = dataNode[k]
-                if (v === undefined || v === '' || v === null) {
-                    acc[joinPath([...basePath, k])] = 'This field is required'
-                }
-            })
-        }
         if (nodeType === 'object') {
             const props = (schemaNode as { properties?: Record<string, SchemaField> }).properties
+            // Required keys (including arrays that must be non-empty)
+            if (required && isRecord(dataNode)) {
+                required.forEach((k) => {
+                    const v = dataNode[k]
+                    const childSchema = props?.[k]
+                    const isMissing = v === undefined || v === '' || v === null
+                    const isEmptyArrayRequired = Array.isArray(v) && childSchema?.type === 'array' && v.length === 0
+                    if (isMissing || isEmptyArrayRequired) {
+                        acc[joinPath([...basePath, k])] = 'This field is required'
+                    }
+                })
+            }
             if (props && isRecord(dataNode)) {
                 Object.entries(props).forEach(([k, child]) =>
                     validate(child, dataNode[k], [...basePath, k], acc)
@@ -227,13 +236,23 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
         const newErrors: Record<string, string> = validate(schema, formData, [])
         if(Object.keys(newErrors).length > 0) {
             setErrors(newErrors)
+            if (onErrorsChange) onErrorsChange(newErrors)
             return
         }
-
+        // Clear errors on success and notify parent
+        if (Object.keys(errors).length > 0) {
+            setErrors({})
+            if (onErrorsChange) onErrorsChange({})
+        }
         onSubmit(formData)
     }
 
     // Debounced input moved to module scope above
+
+    // Notify parent when data changes so TOC can reflect existing/filled sections
+    useEffect(() => {
+        if (onDataChange) onDataChange(formData)
+    }, [formData, onDataChange])
 
     const renderField = (key: string, field: SchemaField, path: (string | number)[]) => {
         const isRequired = ((path.length === 1 ? schema.required : (field.type === 'object' ? field.required : undefined)) ?? []).includes(key)
@@ -244,28 +263,30 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
 
         if(field.enum) {
             return (
-                <FormControl fullWidth key={pathStr} error={!!error} margin={"normal"}>
-                    <InputLabel id={`label-${pathStr}`}>{field.title || key}</InputLabel>
-                    <Select
-                        labelId={`label-${pathStr}`}
-                        value={value}
-                        label={field.title || key}
-                        onChange={handleSelectChange(path)}>
-                        {field.enum.map((option) => (
-                            <MenuItem key={String(option)} value={option}>
-                                {String(option)}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                    {error && <FormHelperText>{error}</FormHelperText>}
-                </FormControl>
+                <Box id={`section-${pathStr}`}>
+                    <FormControl fullWidth key={pathStr} error={!!error} margin={"normal"}>
+                        <InputLabel id={`label-${pathStr}`}>{field.title || key}</InputLabel>
+                        <Select
+                            labelId={`label-${pathStr}`}
+                            value={value}
+                            label={field.title || key}
+                            onChange={handleSelectChange(path)}>
+                            {field.enum.map((option) => (
+                                <MenuItem key={String(option)} value={option}>
+                                    {String(option)}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        {error && <FormHelperText>{error}</FormHelperText>}
+                    </FormControl>
+                </Box>
             )
         }
 
         if(field.type === 'object') {
             const properties = field.properties ?? {}
             return (
-                <Accordion key={pathStr} defaultExpanded={path.length <= 1} disableGutters>
+                <Accordion id={`section-${pathStr}`} key={pathStr} defaultExpanded={path.length <= 1} disableGutters>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                         <Typography sx={{ fontWeight: 500 }}>{field.title || key}</Typography>
                     </AccordionSummary>
@@ -287,12 +308,49 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
             const addItem = () => {
                 const newItem = defaultForSchema(field.items!)
                 setFormData(prev => setValueAtPath(prev, path, [...arr, newItem]))
+                clearErrorFor(path)
+            }
+            // Prune and reindex errors when removing an array item so the Errors TOC stays in sync
+            const pruneErrorsOnArrayRemoval = (arrayPath: (string | number)[], removedIdx: number) => {
+                const arrayPathStr = joinPath(arrayPath)
+                setErrors(prev => {
+                    if (!prev || Object.keys(prev).length === 0) return prev
+                    const next: Record<string, string> = {}
+                    const prefix = arrayPathStr + "."
+                    for (const [k, v] of Object.entries(prev)) {
+                        if (k.startsWith(prefix)) {
+                            const rest = k.slice(prefix.length)
+                            const firstSegEnd = rest.indexOf('.')
+                            const firstSeg = firstSegEnd === -1 ? rest : rest.slice(0, firstSegEnd)
+                            const idxNum = Number(firstSeg)
+                            if (!Number.isNaN(idxNum)) {
+                                if (idxNum === removedIdx) {
+                                    // drop errors that belong to the removed item
+                                    continue
+                                }
+                                if (idxNum > removedIdx) {
+                                    // shift following items down by 1
+                                    const newIdx = String(idxNum - 1)
+                                    const suffix = firstSegEnd === -1 ? '' : rest.slice(firstSegEnd)
+                                    const newKey = prefix + newIdx + suffix
+                                    next[newKey] = v
+                                    continue
+                                }
+                            }
+                        }
+                        // keep unrelated keys as-is
+                        next[k] = v
+                    }
+                    if (onErrorsChange) onErrorsChange(next)
+                    return next
+                })
             }
             const removeItem = (idx: number) => {
                 setFormData(prev => removeValueAtPath(prev, [...path, idx]))
+                pruneErrorsOnArrayRemoval(path, idx)
             }
             return (
-                <Box key={pathStr} sx={{ mt: 2 }}>
+                <Box id={`section-${pathStr}`} key={pathStr} sx={{ mt: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Typography variant="subtitle1">{field.title || key} ({arr.length})</Typography>
                         <IconButton color="primary" onClick={addItem} aria-label="add">
@@ -303,7 +361,7 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
                         {arr.map((itemVal, idx) => (
                             <Box key={joinPath([...path, idx])} sx={{ mb: 1 }}>
                                 {field.items!.type === 'object' ? (
-                                    <Accordion disableGutters defaultExpanded={false}>
+                                    <Accordion id={`section-${joinPath([...path, idx])}`} disableGutters defaultExpanded={false}>
                                         <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
                                             <Typography>Item {idx + 1}</Typography>
                                             <Box sx={{ ml: 'auto' }}>
@@ -345,33 +403,37 @@ export function DynamicForm({schema, initialData, onSubmit}: DynamicFormProps) {
 
         if(field.type === "boolean") {
             return (
-                <FormControl key={pathStr} error={!!error} component={"fieldset"} margin={"normal"}>
-                    <FormControlLabel
-                        control={
-                        <Checkbox checked={!!(currentValue ?? false)}
-                                  onChange={handleChange(path, 'boolean')}
-                                  color={"primary"}/>
-                        }
-                        label={field.title || key}
-                    />
-                    {error && <FormHelperText>{error}</FormHelperText>}
-                </FormControl>
+                <Box id={`section-${pathStr}`}>
+                    <FormControl key={pathStr} error={!!error} component={"fieldset"} margin={"normal"}>
+                        <FormControlLabel
+                            control={
+                            <Checkbox checked={!!(currentValue ?? false)}
+                                      onChange={handleChange(path, 'boolean')}
+                                      color={"primary"}/>
+                            }
+                            label={field.title || key}
+                        />
+                        {error && <FormHelperText>{error}</FormHelperText>}
+                    </FormControl>
+                </Box>
             )
         }
 
         const inputValue: string | number = typeof value === 'number' || typeof value === 'string' ? value : ''
 
         return (
-            <DebouncedTextField
-                key={pathStr}
-                label={field.title || key}
-                type={field.type === "integer" || field.type === "number" ? "number": "text"}
-                value={inputValue}
-                onCommit={handleCommit(path)}
-                required={isRequired}
-                error={error}
-                helperText={field.description}
-            />
+            <Box id={`section-${pathStr}`}>
+                <DebouncedTextField
+                    key={pathStr}
+                    label={field.title || key}
+                    type={field.type === "integer" || field.type === "number" ? "number": "text"}
+                    value={inputValue}
+                    onCommit={handleCommit(path)}
+                    required={isRequired}
+                    error={error}
+                    helperText={field.description}
+                />
+            </Box>
         )
     }
 

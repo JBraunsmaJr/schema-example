@@ -1,29 +1,241 @@
 import './App.css'
-import {Box, Container, Typography} from "@mui/material";
+import React, {useEffect, useMemo, useState} from 'react'
+import {
+  Box,
+  Container,
+  Typography,
+  CssBaseline,
+  ThemeProvider,
+  createTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Paper,
+  List,
+  ListItemButton,
+  ListItemText,
+  Divider
+} from "@mui/material";
 import testSchema from "./test-schema.json"
 import { DynamicForm } from "./schema/DynamicForm"
+import type { JsonSchema, SchemaField } from "./schema/types"
 
 function App() {
-    console.log(testSchema)
+  // theming
+  type Mode = 'light' | 'dark' | 'system'
+  const [mode, setMode] = useState<Mode>(() => (localStorage.getItem('themeMode') as Mode) || 'system')
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const listener = () => forceUpdateTick(t => t + 1)
+    mql.addEventListener?.('change', listener)
+    return () => mql.removeEventListener?.('change', listener)
+  }, [])
+  const [tick, forceUpdateTick] = useState(0) // trigger re-eval on system change
+  const resolvedPaletteMode = useMemo<'light' | 'dark'>(() => {
+    if (mode === 'system') return prefersDark ? 'dark' : 'light'
+    return mode
+  }, [mode, prefersDark, tick])
+  useEffect(() => {
+    localStorage.setItem('themeMode', mode)
+  }, [mode])
 
-    const handleFormSubmit = (data: Record<string, unknown>) => {
-        console.log("Form Submited", data)
-        alert(JSON.stringify(data, null, 2))
+  const theme = useMemo(() => createTheme({
+    palette: {
+      mode: resolvedPaletteMode,
+      primary: {
+        main: resolvedPaletteMode === 'dark' ? '#8ab4f8' : '#1a73e8'
+      },
+      secondary: {
+        main: resolvedPaletteMode === 'dark' ? '#f2a7c2' : '#ad1457'
+      },
+      // Important: only specify background in dark mode. In light mode, let MUI provide defaults.
+      ...(resolvedPaletteMode === 'dark'
+        ? {
+            background: {
+              default: '#0b0f14',
+              paper: '#0f1520'
+            }
+          }
+        : {})
+    },
+    components: {
+      MuiPaper: { styleOverrides: { root: { borderRadius: 12 } } },
+      MuiAccordion: { styleOverrides: { root: { borderRadius: 12, backgroundImage: 'none' } } },
     }
+  }), [resolvedPaletteMode])
+
+  // Build a Table of Contents that reflects what currently exists/is filled in the form
+  type TocItem = { id: string, title: string, depth: number }
+
+  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+  const hasAnyValue = (schemaNode: SchemaField | JsonSchema, dataNode: unknown): boolean => {
+    const t = (schemaNode as SchemaField).type ?? 'object'
+    switch (t) {
+      case 'string':
+        return typeof dataNode === 'string' && dataNode.length > 0
+      case 'number':
+      case 'integer':
+        return typeof dataNode === 'number' && !Number.isNaN(dataNode)
+      case 'boolean':
+        // presence of a boolean value (true/false) counts as existing if explicitly set
+        return typeof dataNode === 'boolean'
+      case 'array':
+        return Array.isArray(dataNode) && dataNode.length > 0
+      case 'object': {
+        if (!isRecord(dataNode)) return false
+        const props = (schemaNode as { properties?: Record<string, SchemaField> }).properties
+        if (!props) return Object.keys(dataNode).length > 0
+        for (const key of Object.keys(props)) {
+          if (hasAnyValue(props[key], dataNode[key])) return true
+        }
+        return false
+      }
+      default:
+        return false
+    }
+  }
+
+  const getTitleForPath = (schemaNode: SchemaField | JsonSchema, path: string[]): string => {
+    return (schemaNode as SchemaField).title || (path[path.length - 1] ?? 'Section')
+  }
+
+  const buildTocExisting = (
+    schemaNode: SchemaField | JsonSchema,
+    dataNode: unknown,
+    basePath: string[] = [],
+    depth = 0,
+    skipSelf = false
+  ): TocItem[] => {
+    const items: TocItem[] = []
+    const t = (schemaNode as SchemaField).type ?? 'object'
+    const pathStr = basePath.join('.')
+    // Always include object/array sections once they exist in the schema (so navigation isn't empty),
+    // but only traverse into children based on actual data presence to keep the TOC compact.
+    if (!skipSelf && pathStr && (t === 'object' || t === 'array')) {
+      items.push({ id: `section-${pathStr}`, title: getTitleForPath(schemaNode, basePath), depth })
+    }
+    if (t === 'object') {
+      const props = (schemaNode as { properties?: Record<string, SchemaField> }).properties
+      if (props) {
+        const record = isRecord(dataNode) ? dataNode : {}
+        for (const key of Object.keys(props)) {
+          const childSchema = props[key]
+          const childData = record[key]
+          // Always include a section entry for each object/array child so the TOC isn't empty at start.
+          items.push(...buildTocExisting(childSchema, childData, [...basePath, key], depth + 1))
+        }
+      }
+    } else if (t === 'array') {
+      const itemsSchema = (schemaNode as SchemaField).items
+      if (itemsSchema && Array.isArray(dataNode)) {
+        // Keep the array section already added above; include entries for existing object items
+        if (itemsSchema.type === 'object') {
+          dataNode.forEach((it, idx) => {
+            if (hasAnyValue(itemsSchema, it)) {
+              const itemPath = [...basePath, String(idx)]
+              items.push({ id: `section-${itemPath.join('.')}`, title: `Item ${idx + 1}`, depth: depth + 1 })
+              // Avoid duplicating the item node itself; only include its children
+              items.push(...buildTocExisting(itemsSchema, it, itemPath, depth + 2, true))
+            }
+          })
+        }
+      }
+    }
+    return items
+  }
+
+  const [formData, setFormData] = useState<Record<string, unknown>>({})
+  const toc = useMemo(() => buildTocExisting(testSchema as JsonSchema, formData, [], 0), [formData])
+
+  // Error list synced from DynamicForm
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const handleFormSubmit = (data: Record<string, unknown>) => {
+    console.log("Form Submitted", data)
+    alert(JSON.stringify(data, null, 2))
+  }
+
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    // expand parent accordion if collapsed
+    const accordion = el.closest('.MuiAccordion-root') as HTMLElement | null
+    if (accordion) {
+      const summary = accordion.querySelector('.MuiAccordionSummary-root') as HTMLButtonElement | null
+      if (summary && summary.getAttribute('aria-expanded') === 'false') {
+        summary.click()
+      }
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const handleErrorClick = (path: string) => scrollToId(`section-${path}`)
 
   return (
-      <Container maxWidth="sm">
-          <Box sx={{my: 4}}>
-              <Typography variant="h4" component="h1" sx={{mb: 2}}>
-                  Platform Example
-              </Typography>
-
-              <DynamicForm
-                onSubmit={handleFormSubmit}
-                schema={testSchema}
-              />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Container maxWidth="lg">
+        <Box sx={{ my: 4, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px 1fr 280px' }, gap: 2 }}>
+          {/* Left TOC */}
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <Paper sx={{ position: 'sticky', top: 16, p: 2 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Sections</Typography>
+              <List dense>
+                {toc.map((t) => (
+                  <ListItemButton key={t.id} sx={{ pl: 1 + t.depth * 2 }} onClick={() => scrollToId(t.id)}>
+                    <ListItemText primaryTypographyProps={{ noWrap: true }} primary={t.title} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Paper>
           </Box>
+
+          {/* Main */}
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h4" component="h1">Platform Example</Typography>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel id="theme-mode-label">Theme</InputLabel>
+                <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+                  <MenuItem value="system">System</MenuItem>
+                  <MenuItem value="light">Light</MenuItem>
+                  <MenuItem value="dark">Dark</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            <DynamicForm
+              onSubmit={handleFormSubmit}
+              schema={testSchema}
+              onErrorsChange={setErrors}
+              onDataChange={setFormData}
+            />
+          </Box>
+
+          {/* Right error panel */}
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            <Paper sx={{ position: 'sticky', top: 16, p: 2 }}>
+              <Typography variant="subtitle1">Errors</Typography>
+              <Divider sx={{ my: 1 }} />
+              {Object.keys(errors).length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No errors</Typography>
+              ) : (
+                <List dense>
+                  {Object.entries(errors).map(([path, msg]) => (
+                    <ListItemButton key={path} onClick={() => handleErrorClick(path)}>
+                      <ListItemText primary={msg} secondary={path} />
+                    </ListItemButton>
+                  ))}
+                </List>
+              )}
+            </Paper>
+          </Box>
+        </Box>
       </Container>
+    </ThemeProvider>
   )
 }
 
