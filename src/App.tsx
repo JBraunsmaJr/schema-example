@@ -174,8 +174,9 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container maxWidth="lg">
-        <Box sx={{ my: 4, display: 'grid', gridTemplateColumns: { xs: '1fr', md: view === 'form' ? '280px 1fr 280px' : '1fr' }, gap: 2 }}>
+      {view !== 'erd' ? (
+        <Container maxWidth="xl">
+          <Box sx={{ my: 4, display: 'grid', gridTemplateColumns: { xs: '1fr', md: view === 'form' ? '280px 1fr 280px' : '1fr' }, gap: 2 }}>
           {/* Left TOC */}
           <Box sx={{ display: { xs: 'none', md: view === 'form' ? 'block' : 'none' } }}>
             <Paper sx={{ position: 'sticky', top: 16, p: 2 }}>
@@ -246,8 +247,41 @@ function App() {
               )}
             </Paper>
           </Box>
+          </Box>
+        </Container>
+      ) : (
+        <Box sx={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">Entity Relationship Diagram</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ToggleButtonGroup
+                size="small"
+                color="primary"
+                exclusive
+                value={view}
+                onChange={(_, val: ViewMode | null) => { if (val) setView(val) }}
+              >
+                <ToggleButton value="form">Form</ToggleButton>
+                <ToggleButton value="erd">ERD</ToggleButton>
+              </ToggleButtonGroup>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel id="theme-mode-label">Theme</InputLabel>
+                <Select labelId="theme-mode-label" label="Theme" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+                  <MenuItem value="system">System</MenuItem>
+                  <MenuItem value="light">Light</MenuItem>
+                  <MenuItem value="dark">Dark</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </Box>
+          <Box sx={{ flex: 1, minHeight: 0 }}>
+            {/* Ensure the ERD fills the remaining viewport height */}
+            <Box sx={{ height: '100%', width: '100%' }}>
+              <SchemaERD schema={testSchema as JsonSchema} data={formData} />
+            </Box>
+          </Box>
         </Box>
-      </Container>
+      )}
     </ThemeProvider>
   )
 }

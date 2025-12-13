@@ -6,6 +6,8 @@ import {
   ReactFlow,
   useEdgesState,
   useNodesState,
+  Handle,
+  Position,
   type Edge,
   type Node
 } from 'reactflow'
@@ -25,7 +27,9 @@ const EntityNode: React.FC<{ data: GraphNode['data'] }> = ({ data }) => {
   const border = data.exists ? theme.palette.primary.main : theme.palette.divider
   const bg = data.exists ? (theme.palette.mode === 'dark' ? 'rgba(138,180,248,0.06)' : 'rgba(26,115,232,0.06)') : theme.palette.background.paper
   return (
-    <Paper elevation={1} sx={{ p: 1.25, minWidth: 200, maxWidth: 320, border: `1px solid ${border}`, background: bg }}>
+    <Paper elevation={1} sx={{ p: 1.25, minWidth: 200, maxWidth: 320, border: `1px solid ${border}`, background: bg, position: 'relative' }}>
+      <Handle type="target" position={Position.Top} style={{ background: border }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: border }} />
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
         {data.title}
       </Typography>
@@ -55,7 +59,7 @@ const nodeTypes = { entity: ({ data }: { data: GraphNode['data'] }) => <EntityNo
 const layoutGraph = (nodes: Node[], edges: Edge[]) => {
   const g = new dagre.graphlib.Graph()
   g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 60, marginx: 20, marginy: 20 })
+  g.setGraph({ rankdir: 'TB', nodesep: 60, ranksep: 120, marginx: 40, marginy: 40 })
   nodes.forEach((n) => g.setNode(n.id, { width: (n.width ?? 220), height: (n.height ?? 120) }))
   edges.forEach((e) => g.setEdge(e.source, e.target))
   dagre.layout(g)
@@ -98,7 +102,7 @@ export const SchemaERD: React.FC<SchemaERDProps> = ({ schema, data }) => {
   }, [initialNodes, initialEdges, setNodes, setEdges])
 
   return (
-    <div style={{ height: 700, width: '100%' }}>
+    <div style={{ height: '100%', width: '100%' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -106,6 +110,8 @@ export const SchemaERD: React.FC<SchemaERDProps> = ({ schema, data }) => {
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.2 }}
+        defaultEdgeOptions={{ type: 'step' }}
       >
         <Background />
         <MiniMap pannable zoomable />

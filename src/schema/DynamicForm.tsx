@@ -423,7 +423,7 @@ export function DynamicForm({schema, initialData, onSubmit, onErrorsChange, onDa
     }
 
     return (
-        <Paper sx={{ p: 4, maxWidth: 600, mx: "auto"}}>
+        <Paper sx={{ p: 4, mx: "auto"}}>
             <Typography variant="h5" gutterBottom>
                 {schema.title || "Form"}
             </Typography>
