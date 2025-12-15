@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Platform Example – Deeply Nested Schema",
+  "title": "Schema Example – Deeply Nested Schema",
   "description": "Demonstrates objects, arrays of objects, arrays of primitives, and required fields at multiple depths.",
   "type": "object",
   "properties": {
@@ -37,7 +37,11 @@
                 "type": "object",
                 "title": "Address",
                 "properties": {
-                  "type": { "type": "string", "enum": ["home", "work"], "title": "Type" },
+                  "type": {
+                    "type": "string",
+                    "enum": ["home", "work"],
+                    "title": "Type"
+                  },
                   "street": { "type": "string", "title": "Street" },
                   "city": { "type": "string", "title": "City" },
                   "lines": {
@@ -73,7 +77,11 @@
         "title": "Project",
         "properties": {
           "name": { "type": "string", "title": "Project Name" },
-          "status": { "type": "string", "enum": ["active", "paused", "done"], "title": "Status" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "done"],
+            "title": "Status"
+          },
           "members": {
             "type": "array",
             "title": "Members",
@@ -83,7 +91,11 @@
               "properties": {
                 "name": { "type": "string", "title": "Name" },
                 "lead": { "type": "boolean", "title": "Is Lead" },
-                "skills": { "type": "array", "title": "Skills", "items": { "type": "string" } }
+                "skills": {
+                  "type": "array",
+                  "title": "Skills",
+                  "items": { "type": "string" }
+                }
               },
               "required": ["name"]
             }
@@ -97,8 +109,16 @@
       "type": "object",
       "title": "Preferences",
       "properties": {
-        "theme": { "type": "string", "enum": ["light", "dark", "system"], "title": "Theme" },
-        "languages": { "type": "array", "title": "Languages", "items": { "type": "string" } },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark", "system"],
+          "title": "Theme"
+        },
+        "languages": {
+          "type": "array",
+          "title": "Languages",
+          "items": { "type": "string" }
+        },
         "notifications": {
           "type": "object",
           "title": "Notifications",
