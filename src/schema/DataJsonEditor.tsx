@@ -9,7 +9,11 @@ export interface DataJsonEditorProps {
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
   schema: JsonSchema;
-  snippetLanguage: string; // usually "json"
+  /**
+   * Language to use for snippet completions.
+   * This is usually JSON but can be any language the editor supports
+   */
+  snippetLanguage: string;
   title?: string;
 }
 
@@ -27,8 +31,9 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
   const monacoRef = useRef<typeof Monaco | null>(null);
   const completionRef = useRef<Monaco.IDisposable | null>(null);
 
+  // Keep an internal copy of the latest external value string for initial render
   useEffect(
-    function syncFromValue() {
+    function syncTextFromExternalValue() {
       const next = JSON.stringify(value, null, 2);
       if (text !== next) setText(next);
     },
@@ -123,6 +128,7 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
 
   function handleChange(val: string | undefined) {
     const nextText = val ?? "";
+    // Do not force-update the Monaco value via the `value` prop; keep it uncontrolled
     setText(nextText);
     try {
       const parsed = JSON.parse(nextText);
@@ -162,6 +168,37 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
     [snippetLanguage],
   );
 
+  // Reflect external value changes into the editor without disrupting the cursor when typing.
+  useEffect(
+    function syncEditorFromExternalValue() {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      if (!editor || !monaco) return;
+      // Do not override while the user is typing to avoid cursor jumps
+      if (editor.hasTextFocus()) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const desired = JSON.stringify(value, null, 2);
+      const current = model.getValue();
+      if (current === desired) return;
+      // Replace content while trying to preserve (non-focused) selection
+      const fullRange = model.getFullModelRange();
+      model.pushEditOperations(
+        [],
+        [
+          {
+            range: fullRange,
+            text: desired,
+          },
+        ],
+        function () {
+          return null;
+        },
+      );
+    },
+    [value],
+  );
+
   return (
     <Paper sx={{ p: 1, height: 560, display: "flex", flexDirection: "column" }}>
       <Typography variant="h6" sx={{ px: 1, pt: 1, pb: 0.5 }}>
@@ -171,7 +208,7 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
         <Editor
           height="100%"
           defaultLanguage="json"
-          value={text}
+          defaultValue={text}
           theme="vs-dark"
           onChange={handleChange}
           onMount={handleMount}
