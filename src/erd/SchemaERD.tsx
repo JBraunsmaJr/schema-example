@@ -1,8 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   useEdgesState,
   useNodesState,
@@ -224,17 +223,21 @@ export function SchemaERD({ schema, data, onNavigate }: SchemaERDProps) {
     [schema, data],
   );
 
-  function mapInitialNode(n: GraphNode): Node {
-    return {
-      id: n.id === "" ? "root" : n.id,
-      type: "entity",
-      data: { ...n.data, onNavigate } as EntityNodeData,
-      position: { x: 0, y: 0 },
-    };
-  }
+  const mapInitialNode = useCallback(
+    (n: GraphNode): Node => {
+      return {
+        id: n.id === "" ? "root" : n.id,
+        type: "entity",
+        data: { ...n.data, onNavigate } as EntityNodeData,
+        position: { x: 0, y: 0 },
+      };
+    },
+    [onNavigate],
+  );
+
   const initialNodes: Node[] = useMemo(() => {
     return graph.nodes.map<Node>(mapInitialNode);
-  }, [graph.nodes]);
+  }, [graph.nodes, mapInitialNode]);
 
   function mapInitialEdge(e: GraphEdge): Edge {
     return {

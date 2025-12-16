@@ -16,7 +16,7 @@ export interface Attribute {
   type: "string" | "number" | "boolean" | "integer" | "array" | "object";
   isArray?: boolean;
   required?: boolean;
-  enumValues?: Array<string | number>;
+  enumValues?: Array<string | number | boolean>;
   path?: string;
 }
 

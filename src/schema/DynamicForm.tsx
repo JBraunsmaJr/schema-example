@@ -1,23 +1,23 @@
-import React, { useCallback, useState, type FormEvent, useEffect } from "react";
+import React, { type FormEvent, useCallback, useEffect, useState } from "react";
 import {
-  TextField,
-  Checkbox,
-  MenuItem,
-  Button,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
-  Typography,
-  Paper,
-  Grid,
-  FormHelperText,
+  Button,
+  Checkbox,
   FormControl,
+  FormControlLabel,
+  FormHelperText,
+  Grid,
+  IconButton,
   InputLabel,
+  MenuItem,
+  Paper,
   Select,
   type SelectChangeEvent,
-  FormControlLabel,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  IconButton,
+  TextField,
+  Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
@@ -163,13 +163,11 @@ export function DynamicForm({
     const [head, ...rest] = path;
     if (typeof head === "number") {
       const base = Array.isArray(obj) ? obj.slice() : ([] as unknown[]);
-      const next = setValueAtPath(base[head], rest, value);
-      base[head] = next;
+      base[head] = setValueAtPath(base[head], rest, value);
       return base;
     }
     const base = isRecord(obj) ? { ...obj } : ({} as Record<string, unknown>);
-    const next = setValueAtPath(base[head], rest, value);
-    base[head] = next;
+    base[head] = setValueAtPath(base[head], rest, value);
     return base;
   };
 

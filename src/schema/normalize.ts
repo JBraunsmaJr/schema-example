@@ -34,7 +34,10 @@ export function normalizeSchema<T extends JsonSchema | SchemaField>(
     return out;
   }
 
-  if ((node as any).type === "object" && (node as JsonSchema).properties) {
+  if (
+    (node as JsonSchema).type === "object" &&
+    (node as JsonSchema).properties
+  ) {
     const schema = node as JsonSchema;
     const properties: Record<string, SchemaField> = {};
     for (const [k, v] of Object.entries(schema.properties)) {

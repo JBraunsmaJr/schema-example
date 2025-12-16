@@ -33,7 +33,7 @@ export function isValidAgainst(schema: SchemaField, data: unknown): boolean {
             if (!childSchema.enum.some((x) => x === v)) return false;
           }
           if (
-            Object.prototype.hasOwnProperty.call(childSchema as any, "const")
+            Object.prototype.hasOwnProperty.call(childSchema as never, "const")
           ) {
             // We don't type `const` in SchemaField; `if` may include it.
             const constVal = (childSchema as any).const;
@@ -169,7 +169,7 @@ export function resolveEffectiveSchema<T extends JsonSchema | SchemaField>(
     return working;
   }
 
-  if ((node as any).type === "object" && (node as JsonSchema).properties) {
+  if (node.type === "object" && (node as JsonSchema).properties) {
     const schema = node as JsonSchema;
     const obj =
       typeof data === "object" && data !== null && !Array.isArray(data)
@@ -183,16 +183,16 @@ export function resolveEffectiveSchema<T extends JsonSchema | SchemaField>(
       description: schema.description,
       properties: { ...schema.properties },
       required: schema.required,
-      if: (schema as any).if,
-      then: (schema as any).then,
-      else: (schema as any).else,
+      if: schema.if,
+      then: schema.then,
+      else: schema.else,
     } as SchemaField;
 
-    if ((schema as any).if && ((schema as any).then || (schema as any).else)) {
-      const matches = isValidAgainst((schema as any).if as SchemaField, data);
+    if (schema.if && (schema.then || schema.else)) {
+      const matches = isValidAgainst(schema.if as SchemaField, data);
       const branch: SchemaField | undefined = matches
-        ? ((schema as any).then as SchemaField | undefined)
-        : ((schema as any).else as SchemaField | undefined);
+        ? (schema.then as SchemaField | undefined)
+        : (schema.else as SchemaField | undefined);
       if (branch) {
         workingRoot = mergeSchemas(workingRoot, branch);
       }
@@ -226,8 +226,8 @@ export function pruneDataAgainstSchema(
   schema: SchemaField | JsonSchema,
   data: unknown,
 ): unknown {
-  if ((schema as SchemaField).type === "object" && (schema as any).properties) {
-    const props = (schema as any).properties as Record<string, SchemaField>;
+  if ((schema as SchemaField).type === "object" && schema.properties) {
+    const props = schema.properties as Record<string, SchemaField>;
     const src =
       typeof data === "object" && data !== null && !Array.isArray(data)
         ? (data as Record<string, unknown>)

@@ -131,6 +131,23 @@
       }
     }
   },
+  "if": {
+    "type": "object",
+    "properties": {
+      "role": { "const": "Developer" }
+    }
+  },
+  "then": {
+    "type": "object",
+    "properties": {
+      "testField": {
+        "type": "string",
+        "title": "Test Field",
+        "description": "This field is only visible to developers.",
+        "$order": 4
+      }
+    }
+  },
   "required": [
     "username",
     "organization",

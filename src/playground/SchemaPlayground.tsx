@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Box,
   Grid,
@@ -130,27 +130,7 @@ export default function SchemaPlayground() {
     setError(null);
   };
 
-  React.useEffect(() => {
-    const id = setTimeout(() => {
-      try {
-        const parsed = JSON.parse(schemaText);
-        if (
-          parsed?.type !== "object" ||
-          !parsed?.properties ||
-          typeof parsed.properties !== "object"
-        ) {
-          throw new Error("Root schema must be an object with properties");
-        }
-        setSchemaObj(parsed as JsonSchema);
-        setError(null);
-      } catch (e: any) {
-        setError(e?.message ?? String(e));
-      }
-    }, debounceMs);
-    return () => clearTimeout(id);
-  }, [schemaText]);
-
-  const applySchema = () => {
+  const applySchema = useCallback(() => {
     try {
       const parsed = JSON.parse(schemaText);
       if (
@@ -165,7 +145,13 @@ export default function SchemaPlayground() {
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
-  };
+  }, [schemaText]);
+
+  React.useEffect(() => {
+    const id = setTimeout(applySchema, debounceMs);
+
+    return () => clearTimeout(id);
+  }, [schemaText, applySchema]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     try {
@@ -285,7 +271,6 @@ export default function SchemaPlayground() {
       console.error("Monaco JSON schema configuration error", e);
     }
 
-    const model = editor.getModel();
     const updateHighlightFromCursor = () => {
       const m = editor.getModel();
       if (!m) return;
