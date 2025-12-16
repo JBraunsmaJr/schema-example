@@ -23,6 +23,11 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { type JsonSchema, type SchemaField } from "./types.ts";
+import { normalizeSchema, sortEntriesByOrder } from "./normalize";
+import {
+  pruneDataAgainstSchema,
+  resolveEffectiveSchema,
+} from "./conditional";
 
 interface DynamicFormProps {
   schema: JsonSchema;
@@ -93,7 +98,31 @@ export function DynamicForm({
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Helpers to work with nested paths
+  const normalizedSchema = React.useMemo(() => normalizeSchema(schema), [schema]);
+
+  const [debouncedData, setDebouncedData] = useState<Record<string, unknown>>(
+    formData,
+  );
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedData(formData), 200);
+    return () => clearTimeout(id);
+  }, [formData]);
+
+  const effectiveSchema = React.useMemo(
+    () => resolveEffectiveSchema<JsonSchema>(normalizedSchema, debouncedData),
+    [normalizedSchema, debouncedData],
+  );
+
+  useEffect(() => {
+    const pruned = pruneDataAgainstSchema(effectiveSchema, formData) as Record<
+      string,
+      unknown
+    >;
+    if (JSON.stringify(pruned) !== JSON.stringify(formData)) {
+      setFormData(pruned);
+    }
+  }, [effectiveSchema]);
+
   const joinPath = (path: (string | number)[]) =>
     path.map((p) => (typeof p === "number" ? String(p) : p)).join(".");
 
@@ -210,7 +239,6 @@ export function DynamicForm({
     [setPathValue, clearErrorFor],
   );
 
-  // Stable factory for primitive commit handler (avoid calling hooks inside renderField)
   const handleCommit = useCallback(
     (path: (string | number)[]) => (next: string | number) => {
       setPathValue(path, next);
@@ -275,14 +303,23 @@ export function DynamicForm({
         validate(items, item, [...basePath, idx], acc),
       );
     } else {
-      // primitives: nothing extra for now
+      // primitives: enum membership check when provided
+      const f = schemaNode as SchemaField;
+      if (f.enum && dataNode !== undefined && dataNode !== "") {
+        const ok = (f.enum as unknown[]).some((x) => x === dataNode);
+        if (!ok) acc[joinPath(basePath)] = "Invalid value";
+      }
     }
     return acc;
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const newErrors: Record<string, string> = validate(schema, formData, []);
+    const newErrors: Record<string, string> = validate(
+      effectiveSchema,
+      formData,
+      [],
+    );
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       if (onErrorsChange) onErrorsChange(newErrors);
@@ -308,7 +345,7 @@ export function DynamicForm({
   ) => {
     const isRequired = (
       (path.length === 1
-        ? schema.required
+        ? effectiveSchema.required
         : field.type === "object"
           ? field.required
           : undefined) ?? []
@@ -319,6 +356,14 @@ export function DynamicForm({
     const value = currentValue ?? (field.type === "array" ? [] : "");
 
     if (field.enum) {
+      // Prefer labels from oneOf if provided
+      const labelsByValue: Record<string, string> | undefined = Array.isArray(
+        field.oneOf,
+      )
+        ? Object.fromEntries(
+            field.oneOf.map((o) => [String(o.const), o.title ?? String(o.const)]),
+          )
+        : undefined;
       return (
         <Box id={`section-${pathStr}`}>
           <FormControl
@@ -336,11 +381,14 @@ export function DynamicForm({
               label={field.title || key}
               onChange={handleSelectChange(path)}
             >
-              {field.enum.map((option) => (
-                <MenuItem key={String(option)} value={option}>
-                  {String(option)}
-                </MenuItem>
-              ))}
+              {field.enum.map((option) => {
+                const label = labelsByValue?.[String(option)] ?? String(option);
+                return (
+                  <MenuItem key={String(option)} value={option}>
+                    {label}
+                  </MenuItem>
+                );
+              })}
             </Select>
             {error && <FormHelperText>{error}</FormHelperText>}
           </FormControl>
@@ -364,7 +412,7 @@ export function DynamicForm({
           </AccordionSummary>
           <AccordionDetails>
             <Grid container spacing={2}>
-              {Object.entries(properties).map(([childKey, childField]) => (
+              {sortEntriesByOrder(Object.entries(properties)).map(([childKey, childField]) => (
                 <Grid key={joinPath([...path, childKey])} size={{ xs: 12 }}>
                   {renderField(childKey, childField, [...path, childKey])}
                 </Grid>
@@ -563,17 +611,17 @@ export function DynamicForm({
   return (
     <Paper sx={{ p: 4, mx: "auto" }}>
       <Typography variant="h5" gutterBottom>
-        {schema.title || "Form"}
+        {effectiveSchema.title || schema.title || "Form"}
       </Typography>
-      {schema.description && (
+      {(effectiveSchema.description || schema.description) && (
         <Typography variant={"body2"} color={"textSecondary"} paragraph>
-          {schema.description}
+          {effectiveSchema.description || schema.description}
         </Typography>
       )}
 
       <form onSubmit={handleSubmit} noValidate>
         <Grid container spacing={2}>
-          {Object.entries(schema.properties).map(([key, field]) => (
+          {sortEntriesByOrder(Object.entries(effectiveSchema.properties)).map(([key, field]) => (
             <Grid key={key} size={{ xs: 12 }}>
               {renderField(key, field, [key])}
             </Grid>
