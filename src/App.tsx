@@ -27,9 +27,18 @@ import { SchemaERD } from "./erd/SchemaERD";
 import { ArtifactsTreeView } from "./artifacts/ArtifactsTreeView";
 import { ArtifactsTagsView } from "./artifacts/ArtifactsTagsView";
 import SchemaPlayground from "./playground/SchemaPlayground";
+import SnippetEditor from "./snippet/SnippetEditor";
+import DataJsonEditor from "./schema/DataJsonEditor";
 
 interface TopbarProps {
-  view: "form" | "erd" | "artifacts-tree" | "artifacts-tags" | "playground";
+  view:
+    | "form"
+    | "json"
+    | "erd"
+    | "artifacts-tree"
+    | "artifacts-tags"
+    | "playground"
+    | "snippets";
   mode: "system" | "light" | "dark";
   handleViewChange: (e: unknown, val: TopbarProps["view"] | null) => void;
   handleModeChange: (e: SelectChangeEvent) => void;
@@ -64,10 +73,12 @@ function Topbar({
           onChange={handleViewChange}
         >
           <ToggleButton value="form">Form</ToggleButton>
+          <ToggleButton value="json">JSON</ToggleButton>
           <ToggleButton value="erd">ERD</ToggleButton>
           <ToggleButton value="artifacts-tree">Artifacts Tree</ToggleButton>
           <ToggleButton value="artifacts-tags">Artifacts Tags</ToggleButton>
           <ToggleButton value="playground">Playground</ToggleButton>
+          <ToggleButton value="snippets">Snippets</ToggleButton>
         </ToggleButtonGroup>
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="theme-mode-label">Theme</InputLabel>
@@ -90,10 +101,12 @@ function Topbar({
 function App() {
   type ViewMode =
     | "form"
+    | "json"
     | "erd"
     | "artifacts-tree"
     | "artifacts-tags"
-    | "playground";
+    | "playground"
+    | "snippets";
   const [view, setView] = useState<ViewMode>("form");
   type Mode = "light" | "dark" | "system";
   function initMode(): Mode {
@@ -281,7 +294,12 @@ function App() {
   const [highlightPath, setHighlightPath] = useState<string | null>(null);
   const toc = useMemo(
     function () {
-      return buildTocExisting(testSchema as JsonSchema, formData, [], 0);
+      return buildTocExisting(
+        testSchema as unknown as JsonSchema,
+        formData,
+        [],
+        0,
+      );
     },
     [formData],
   );
@@ -393,7 +411,7 @@ function App() {
               />
               <DynamicForm
                 onSubmit={handleFormSubmit}
-                schema={testSchema as JsonSchema}
+                schema={testSchema as unknown as JsonSchema}
                 onErrorsChange={setErrors}
                 onDataChange={setFormData}
                 highlightPath={highlightPath}
@@ -427,6 +445,27 @@ function App() {
             </Box>
           </Box>
         </Container>
+      ) : view === "json" ? (
+        <Container maxWidth="xl">
+          <Box sx={{ my: 4 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"JSON Editor"}
+            />
+            <Paper sx={{ p: 2 }}>
+              <DataJsonEditor
+                value={formData}
+                onChange={setFormData}
+                schema={testSchema as unknown as JsonSchema}
+                snippetLanguage="json"
+                title="Edit Data as JSON"
+              />
+            </Paper>
+          </Box>
+        </Container>
       ) : view === "playground" ? (
         <Container maxWidth="xl">
           <Box sx={{ my: 4 }}>
@@ -439,6 +478,21 @@ function App() {
             />
             <Paper sx={{ p: 2 }}>
               <SchemaPlayground />
+            </Paper>
+          </Box>
+        </Container>
+      ) : view === "snippets" ? (
+        <Container maxWidth="lg">
+          <Box sx={{ my: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"Snippet Editor"}
+            />
+            <Paper sx={{ p: 2 }}>
+              <SnippetEditor snippetLanguage={"json"} />
             </Paper>
           </Box>
         </Container>
@@ -469,7 +523,7 @@ function App() {
               {/* Ensure the ERD fills the remaining viewport height */}
               <Box sx={{ height: "100%", width: "100%", overflow: "hidden" }}>
                 <SchemaERD
-                  schema={testSchema as JsonSchema}
+                  schema={testSchema as unknown as JsonSchema}
                   data={formData}
                   onNavigate={navigateToPathFromERD}
                 />

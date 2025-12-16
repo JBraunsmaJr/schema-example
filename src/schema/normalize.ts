@@ -56,7 +56,7 @@ export function normalizeSchema<T extends JsonSchema | SchemaField>(
 export function sortEntriesByOrder(
   entries: [string, SchemaField][],
 ): [string, SchemaField][] {
-  return entries.sort(([ak, a], [bk, b]) => {
+  return entries.sort(([_ak, a], [_bk, b]) => {
     const ao = (a as SchemaField).$order;
     const bo = (b as SchemaField).$order;
     const aHas = typeof ao === "number";

@@ -223,14 +223,7 @@ export function DynamicForm({
     [onErrorsChange],
   );
 
-  const handleSelectChange = useCallback(
-    (path: (string | number)[]) =>
-      (event: SelectChangeEvent, _child?: unknown) => {
-        setPathValue(path, event.target.value);
-        clearErrorFor(path);
-      },
-    [setPathValue, clearErrorFor],
-  );
+  // Removed legacy select change handler; per-field enum Select uses a typed handler now.
 
   const handleChange = useCallback(
     (path: (string | number)[], type: string) =>
@@ -376,6 +369,17 @@ export function DynamicForm({
             ]),
           )
         : undefined;
+      const valueMap: Record<string, string | number | boolean> =
+        Object.fromEntries(field.enum.map((opt) => [String(opt), opt]));
+      const selectValue = value === undefined ? "" : String(value);
+      function onEnumChange(event: SelectChangeEvent) {
+        const raw = event.target.value as string;
+        const decoded = Object.prototype.hasOwnProperty.call(valueMap, raw)
+          ? valueMap[raw]
+          : raw;
+        setPathValue(path, decoded);
+        clearErrorFor(path);
+      }
       return (
         <Box
           id={`section-${pathStr}`}
@@ -400,14 +404,14 @@ export function DynamicForm({
             </InputLabel>
             <Select
               labelId={`label-${pathStr}`}
-              value={value}
+              value={selectValue}
               label={field.title || key}
-              onChange={handleSelectChange(path)}
+              onChange={onEnumChange}
             >
               {field.enum.map((option) => {
                 const label = labelsByValue?.[String(option)] ?? String(option);
                 return (
-                  <MenuItem key={String(option)} value={option}>
+                  <MenuItem key={String(option)} value={String(option)}>
                     {label}
                   </MenuItem>
                 );
