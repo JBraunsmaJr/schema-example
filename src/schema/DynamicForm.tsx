@@ -37,6 +37,10 @@ interface DynamicFormProps {
    * e.g. "details.fuel"
    */
   highlightPath?: string | null;
+  /**
+   * Notify parent when a section/control is focused/selected
+   * */
+  onSectionFocus?: (path: string) => void;
 }
 
 const DebouncedTextField: React.FC<{
@@ -95,6 +99,7 @@ export function DynamicForm({
   onErrorsChange,
   onDataChange,
   highlightPath,
+  onSectionFocus,
 }: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>(
     initialData ?? {},
@@ -382,6 +387,7 @@ export function DynamicForm({
             px: isHighlighted ? 1 : 0,
             pt: isHighlighted ? 1 : 0,
           }}
+          onMouseDown={() => onSectionFocus && onSectionFocus(pathStr)}
         >
           <FormControl
             fullWidth
@@ -427,6 +433,7 @@ export function DynamicForm({
             borderRadius: 2,
             transition: "border-color 150ms ease, border-width 150ms ease",
           }}
+          onMouseDown={() => onSectionFocus && onSectionFocus(pathStr)}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography sx={{ fontWeight: 500 }}>
@@ -521,6 +528,7 @@ export function DynamicForm({
             px: isHighlighted ? 1 : 0,
             pt: isHighlighted ? 1 : 0,
           }}
+          onMouseDown={() => onSectionFocus && onSectionFocus(pathStr)}
         >
           <Box
             sx={{
@@ -549,6 +557,9 @@ export function DynamicForm({
                       borderColor: "divider",
                       borderRadius: 2,
                     }}
+                    onMouseDown={() =>
+                      onSectionFocus && onSectionFocus(joinPath([...path, idx]))
+                    }
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                       <Typography>Item {idx + 1}</Typography>
@@ -604,7 +615,10 @@ export function DynamicForm({
 
     if (field.type === "boolean") {
       return (
-        <Box id={`section-${pathStr}`}>
+        <Box
+          id={`section-${pathStr}`}
+          onMouseDown={() => onSectionFocus && onSectionFocus(pathStr)}
+        >
           <FormControl
             key={pathStr}
             error={!!error}
@@ -641,6 +655,7 @@ export function DynamicForm({
           px: isHighlighted ? 1 : 0,
           pt: isHighlighted ? 1 : 0,
         }}
+        onMouseDown={() => onSectionFocus && onSectionFocus(pathStr)}
       >
         <DebouncedTextField
           key={pathStr}

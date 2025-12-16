@@ -12,7 +12,7 @@ import {
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { DynamicForm } from "../schema/DynamicForm";
 import type { JsonSchema } from "../schema/types";
-import { getLocation } from "jsonc-parser";
+import { getLocation, parseTree, findNodeAtLocation } from "jsonc-parser";
 
 const SHIPPING: JsonSchema = {
   type: "object",
@@ -119,6 +119,55 @@ export default function SchemaPlayground() {
   const [formData, setFormData] = React.useState<Record<string, unknown>>({});
   const debounceMs = 400;
   const [highlightPath, setHighlightPath] = React.useState<string | null>(null);
+  const editorRef = React.useRef<
+    import("monaco-editor").editor.IStandaloneCodeEditor | null
+  >(null);
+  const monacoRef = React.useRef<typeof import("monaco-editor") | null>(null);
+  const decorationsRef = React.useRef<string[]>([]);
+
+  React.useEffect(() => {
+    const styleId = "json-node-highlight-style";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      /* Stronger inline background for the exact JSON node */
+      .monaco-editor .json-node-highlight {
+        /* Theme-aware using CSS vars with safe fallbacks */
+        --json-node-bg: rgba(255, 215, 0, 0.35);
+        --json-node-outline: rgba(255, 215, 0, 0.60);
+        background-color: var(--json-node-bg) !important;
+        outline: 1px solid var(--json-node-outline) !important;
+        border-radius: 3px;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.0);
+        position: relative;
+        z-index: 10; /* keep above token backgrounds */
+        animation: json-node-pulse 900ms ease-out 1;
+      }
+      /* Light/Dark tweaks based on Monaco root theme classes */
+      .vs .json-node-highlight, .vs-light .json-node-highlight {
+        --json-node-bg: rgba(255, 200, 0, 0.35);
+        --json-node-outline: rgba(180, 120, 0, 0.7);
+      }
+      .vs-dark .json-node-highlight, .hc-black .json-node-highlight {
+        --json-node-bg: rgba(80, 79, 0, 0.28);
+        --json-node-outline: rgba(153, 130, 0, 0.5);
+      }
+
+      @keyframes json-node-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.6); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.0); }
+      }
+
+      /* Optional: subtle left rail marker via glyph margin */
+      .monaco-editor .json-node-glyph {
+        background-color: rgba(255, 215, 0, 0.9);
+        width: 3px;
+        height: 100%;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   const loadExample = (name: string) => {
     setExample(name);
@@ -154,6 +203,8 @@ export default function SchemaPlayground() {
   }, [schemaText, applySchema]);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco as unknown as typeof import("monaco-editor");
     try {
       const modelUri = monaco.Uri.parse("inmemory://model/schema.json");
       const model = editor.getModel();
@@ -302,11 +353,121 @@ export default function SchemaPlayground() {
     updateHighlightFromCursor();
     const disp1 = editor.onDidChangeCursorPosition(updateHighlightFromCursor);
     const disp2 = editor.onDidChangeModelContent(updateHighlightFromCursor);
+
+    // Clear the form-driven highlight when editor gains focus
+    const disp3 = editor.onDidFocusEditorText(() => {
+      setHighlightPath(null);
+      // Clear decorations
+      if (decorationsRef.current.length > 0) {
+        decorationsRef.current = editor.deltaDecorations(
+          decorationsRef.current,
+          [],
+        );
+      }
+    });
     editor.onDidDispose(() => {
       disp1.dispose();
       disp2.dispose();
+      disp3.dispose();
     });
   };
+
+  // When a form section is focused, highlight and reveal it in Monaco
+  React.useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Clear previous decorations
+    if (!highlightPath) {
+      if (decorationsRef.current.length > 0) {
+        decorationsRef.current = editor.deltaDecorations(
+          decorationsRef.current,
+          [],
+        );
+      }
+      return;
+    }
+
+    try {
+      const text = model.getValue();
+      const root = parseTree(text);
+      if (!root) return;
+      // Build JSON path like ['properties','user','properties','profile']
+      // For array indices in the form path (e.g., projects.0.name) map index -> 'items'
+      const segs = highlightPath.split(".").filter(Boolean);
+      const jsonPath: (string | number)[] = [];
+      for (const s of segs) {
+        const idx = Number(s);
+        if (!Number.isNaN(idx) && String(idx) === s) {
+          // numeric path segment -> array 'items'
+          jsonPath.push("items");
+        } else {
+          jsonPath.push("properties", s);
+        }
+      }
+      const node = findNodeAtLocation(root, jsonPath);
+      if (!node) return;
+      const start = model.getPositionAt(node.offset);
+      const end = model.getPositionAt(node.offset + node.length);
+
+      // Whole-line decoration for context
+      const wholeLineRange = new (monacoRef.current as any).Range(
+        start.lineNumber,
+        1,
+        end.lineNumber,
+        1,
+      );
+      // Precise inline decoration over the exact node
+      const inlineRange = new (monacoRef.current as any).Range(
+        start.lineNumber,
+        start.column,
+        end.lineNumber,
+        end.column,
+      );
+
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
+        {
+          range: wholeLineRange,
+          options: {
+            isWholeLine: true,
+            overviewRuler: {
+              color: "rgba(255, 215, 0, 0.6)",
+              position: (monacoRef.current as any).editor.OverviewRulerLane
+                .Full,
+            },
+            minimap: {
+              color: "rgba(255, 215, 0, 0.4)",
+              position: 1,
+            },
+            inlineClassNameAffectsLetterSpacing: false,
+            classNameAffectsLetterSpacing: false,
+            stickiness: (monacoRef.current as any).editor.TrackedRangeStickiness
+              .NeverGrowsWhenTypingAtEdges,
+            backgroundColor: "rgba(255, 215, 0, 0.10)",
+            glyphMarginClassName: "json-node-glyph",
+            glyphMarginHoverMessage: { value: "Selected from form" },
+          },
+        } as any,
+        {
+          range: inlineRange,
+          options: {
+            isWholeLine: false,
+            inlineClassName: "json-node-highlight",
+            inlineClassNameAffectsLetterSpacing: false,
+            stickiness: (monacoRef.current as any).editor.TrackedRangeStickiness
+              .NeverGrowsWhenTypingAtEdges,
+            classNameAffectsLetterSpacing: false,
+          },
+        } as any,
+      ]);
+      // Reveal the section in the center without moving the cursor
+      editor.revealRangeInCenter(wholeLineRange);
+    } catch (_e) {
+      // ignore parse errors
+    }
+  }, [highlightPath]);
 
   return (
     <Box sx={{ p: 2 }}>
@@ -354,6 +515,7 @@ export default function SchemaPlayground() {
             initialData={formData}
             onDataChange={setFormData}
             highlightPath={highlightPath}
+            onSectionFocus={(p) => setHighlightPath(p)}
             onSubmit={(data) => console.log("submit", data)}
           />
         </Grid>
