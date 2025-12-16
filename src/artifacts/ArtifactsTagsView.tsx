@@ -20,7 +20,8 @@ import AddIcon from "@mui/icons-material/Add";
 
 function collectArtifacts(node: Artifact, out: Artifact[] = []): Artifact[] {
   out.push(node);
-  if (node.type === "folder") node.children.forEach((c) => collectArtifacts(c, out));
+  if (node.type === "folder")
+    node.children.forEach((c) => collectArtifacts(c, out));
   return out;
 }
 
@@ -36,7 +37,9 @@ export function ArtifactsTagsView() {
   }, [all, selectedTag]);
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+    <Box
+      sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1 }}
+    >
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Typography variant="h6">Tags</Typography>
         <Stack direction="row" alignItems="center" spacing={1}>
@@ -67,25 +70,45 @@ export function ArtifactsTagsView() {
             <React.Fragment key={a.id}>
               <ListItem
                 sx={{
-                  '& .add-tag': {
+                  "& .add-tag": {
                     opacity: 0,
                     maxWidth: 0,
-                    overflow: 'hidden',
-                    transform: 'scaleX(0.96)',
-                    transition: 'opacity 150ms ease, max-width 150ms ease, transform 150ms ease',
+                    overflow: "hidden",
+                    transform: "scaleX(0.96)",
+                    transition:
+                      "opacity 150ms ease, max-width 150ms ease, transform 150ms ease",
                   },
-                  '&:hover .add-tag, &:focus-within .add-tag': {
+                  "&:hover .add-tag, &:focus-within .add-tag": {
                     opacity: 1,
                     maxWidth: 240,
-                    transform: 'none',
+                    transform: "none",
                   },
                 }}
                 secondaryAction={
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ maxWidth: 480, flexWrap: "wrap" }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ maxWidth: 480, flexWrap: "wrap" }}
+                  >
                     {(a.tags || []).map((t) => (
-                      <Chip key={t} label={t} size="small" onDelete={() => removeTag(a.id, t)} />
+                      <Chip
+                        key={t}
+                        label={t}
+                        size="small"
+                        onDelete={() => removeTag(a.id, t)}
+                      />
                     ))}
-                    <Paper variant="outlined" className="add-tag" sx={{ p: 0.25, display: "flex", alignItems: "center", minWidth: 0 }}>
+                    <Paper
+                      variant="outlined"
+                      className="add-tag"
+                      sx={{
+                        p: 0.25,
+                        display: "flex",
+                        alignItems: "center",
+                        minWidth: 0,
+                      }}
+                    >
                       <InputBase
                         placeholder="Add tag"
                         sx={{ pl: 1, pr: 0.5, fontSize: 14, width: 140 }}
@@ -97,13 +120,19 @@ export function ArtifactsTagsView() {
                           }
                         }}
                       />
-                      <IconButton size="small" onClick={(e) => {
-                        const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement) || null;
-                        if (input && input.value.trim()) {
-                          addTag(a.id, input.value);
-                          input.value = "";
-                        }
-                      }}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          const input =
+                            (e.currentTarget.parentElement?.querySelector(
+                              "input",
+                            ) as HTMLInputElement) || null;
+                          if (input && input.value.trim()) {
+                            addTag(a.id, input.value);
+                            input.value = "";
+                          }
+                        }}
+                      >
                         <AddIcon fontSize="small" />
                       </IconButton>
                     </Paper>

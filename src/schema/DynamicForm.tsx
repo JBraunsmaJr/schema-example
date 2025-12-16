@@ -24,10 +24,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { type JsonSchema, type SchemaField } from "./types.ts";
 import { normalizeSchema, sortEntriesByOrder } from "./normalize";
-import {
-  pruneDataAgainstSchema,
-  resolveEffectiveSchema,
-} from "./conditional";
+import { pruneDataAgainstSchema, resolveEffectiveSchema } from "./conditional";
 
 interface DynamicFormProps {
   schema: JsonSchema;
@@ -35,6 +32,11 @@ interface DynamicFormProps {
   onSubmit: (data: Record<string, unknown>) => void;
   onErrorsChange?: (errors: Record<string, string>) => void;
   onDataChange?: (data: Record<string, unknown>) => void;
+  /**
+   * Highlight a specific section by its dot-path
+   * e.g. "details.fuel"
+   */
+  highlightPath?: string | null;
 }
 
 const DebouncedTextField: React.FC<{
@@ -92,17 +94,20 @@ export function DynamicForm({
   onSubmit,
   onErrorsChange,
   onDataChange,
+  highlightPath,
 }: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>(
     initialData ?? {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const normalizedSchema = React.useMemo(() => normalizeSchema(schema), [schema]);
-
-  const [debouncedData, setDebouncedData] = useState<Record<string, unknown>>(
-    formData,
+  const normalizedSchema = React.useMemo(
+    () => normalizeSchema(schema),
+    [schema],
   );
+
+  const [debouncedData, setDebouncedData] =
+    useState<Record<string, unknown>>(formData);
   useEffect(() => {
     const id = setTimeout(() => setDebouncedData(formData), 200);
     return () => clearTimeout(id);
@@ -352,6 +357,7 @@ export function DynamicForm({
     ).includes(key);
     const pathStr = joinPath(path);
     const error = errors[pathStr];
+    const isHighlighted = highlightPath === pathStr;
     const currentValue = getValueAtPath(formData, path);
     const value = currentValue ?? (field.type === "array" ? [] : "");
 
@@ -361,11 +367,24 @@ export function DynamicForm({
         field.oneOf,
       )
         ? Object.fromEntries(
-            field.oneOf.map((o) => [String(o.const), o.title ?? String(o.const)]),
+            field.oneOf.map((o) => [
+              String(o.const),
+              o.title ?? String(o.const),
+            ]),
           )
         : undefined;
       return (
-        <Box id={`section-${pathStr}`}>
+        <Box
+          id={`section-${pathStr}`}
+          sx={{
+            border: isHighlighted ? 2 : 0,
+            borderColor: isHighlighted ? "secondary.main" : "transparent",
+            borderRadius: 1,
+            transition: "border-color 150ms ease, border-width 150ms ease",
+            px: isHighlighted ? 1 : 0,
+            pt: isHighlighted ? 1 : 0,
+          }}
+        >
           <FormControl
             fullWidth
             key={pathStr}
@@ -404,6 +423,12 @@ export function DynamicForm({
           key={pathStr}
           defaultExpanded={path.length <= 1}
           disableGutters
+          sx={{
+            border: isHighlighted ? 2 : 1,
+            borderColor: isHighlighted ? "secondary.main" : "divider",
+            borderRadius: 2,
+            transition: "border-color 150ms ease, border-width 150ms ease",
+          }}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography sx={{ fontWeight: 500 }}>
@@ -412,11 +437,13 @@ export function DynamicForm({
           </AccordionSummary>
           <AccordionDetails>
             <Grid container spacing={2}>
-              {sortEntriesByOrder(Object.entries(properties)).map(([childKey, childField]) => (
-                <Grid key={joinPath([...path, childKey])} size={{ xs: 12 }}>
-                  {renderField(childKey, childField, [...path, childKey])}
-                </Grid>
-              ))}
+              {sortEntriesByOrder(Object.entries(properties)).map(
+                ([childKey, childField]) => (
+                  <Grid key={joinPath([...path, childKey])} size={{ xs: 12 }}>
+                    {renderField(childKey, childField, [...path, childKey])}
+                  </Grid>
+                ),
+              )}
             </Grid>
           </AccordionDetails>
         </Accordion>
@@ -484,7 +511,19 @@ export function DynamicForm({
         pruneErrorsOnArrayRemoval(path, idx);
       };
       return (
-        <Box id={`section-${pathStr}`} key={pathStr} sx={{ mt: 2 }}>
+        <Box
+          id={`section-${pathStr}`}
+          key={pathStr}
+          sx={{
+            mt: 2,
+            border: isHighlighted ? 2 : 0,
+            borderColor: isHighlighted ? "secondary.main" : "transparent",
+            borderRadius: 1,
+            transition: "border-color 150ms ease, border-width 150ms ease",
+            px: isHighlighted ? 1 : 0,
+            pt: isHighlighted ? 1 : 0,
+          }}
+        >
           <Box
             sx={{
               display: "flex",
@@ -507,6 +546,11 @@ export function DynamicForm({
                     id={`section-${joinPath([...path, idx])}`}
                     disableGutters
                     defaultExpanded={false}
+                    sx={{
+                      border: 1,
+                      borderColor: "divider",
+                      borderRadius: 2,
+                    }}
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                       <Typography>Item {idx + 1}</Typography>
@@ -589,7 +633,17 @@ export function DynamicForm({
       typeof value === "number" || typeof value === "string" ? value : "";
 
     return (
-      <Box id={`section-${pathStr}`}>
+      <Box
+        id={`section-${pathStr}`}
+        sx={{
+          border: isHighlighted ? 2 : 0,
+          borderColor: isHighlighted ? "secondary.main" : "transparent",
+          borderRadius: 1,
+          transition: "border-color 150ms ease, border-width 150ms ease",
+          px: isHighlighted ? 1 : 0,
+          pt: isHighlighted ? 1 : 0,
+        }}
+      >
         <DebouncedTextField
           key={pathStr}
           label={field.title || key}
@@ -621,11 +675,13 @@ export function DynamicForm({
 
       <form onSubmit={handleSubmit} noValidate>
         <Grid container spacing={2}>
-          {sortEntriesByOrder(Object.entries(effectiveSchema.properties)).map(([key, field]) => (
-            <Grid key={key} size={{ xs: 12 }}>
-              {renderField(key, field, [key])}
-            </Grid>
-          ))}
+          {sortEntriesByOrder(Object.entries(effectiveSchema.properties)).map(
+            ([key, field]) => (
+              <Grid key={key} size={{ xs: 12 }}>
+                {renderField(key, field, [key])}
+              </Grid>
+            ),
+          )}
         </Grid>
 
         <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>

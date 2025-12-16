@@ -49,66 +49,84 @@ function NodeRow({
         disableGutters
         sx={{
           pl: depth * 2,
-          '& .add-tag': {
+          "& .add-tag": {
             opacity: 0,
             maxWidth: 0,
-            overflow: 'hidden',
-            transform: 'scaleX(0.96)',
-            transition: 'opacity 150ms ease, max-width 150ms ease, transform 150ms ease',
+            overflow: "hidden",
+            transform: "scaleX(0.96)",
+            transition:
+              "opacity 150ms ease, max-width 150ms ease, transform 150ms ease",
           },
-          '&:hover .add-tag, &:focus-within .add-tag': {
+          "&:hover .add-tag, &:focus-within .add-tag": {
             opacity: 1,
             maxWidth: 260,
-            transform: 'none',
+            transform: "none",
           },
         }}
         secondaryAction={
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: "wrap", maxWidth: 420 }}>
-            {(node.tags || []).map((t) => (
-              <Chip
-                key={t}
-                label={t}
-                size="small"
-                onDelete={() => onRemoveTag(node.id, t)}
-              />
-            ))}
-          </Stack>
-          <Paper
-            variant="outlined"
-            className="add-tag"
-            sx={{ p: 0.25, display: "flex", alignItems: "center", minWidth: 0 }}
-          >
-            <InputBase
-              placeholder="Add tag"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  onAddTag(node.id, newTag);
-                  setNewTag("");
-                }
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
+              sx={{ flexWrap: "wrap", maxWidth: 420 }}
+            >
+              {(node.tags || []).map((t) => (
+                <Chip
+                  key={t}
+                  label={t}
+                  size="small"
+                  onDelete={() => onRemoveTag(node.id, t)}
+                />
+              ))}
+            </Stack>
+            <Paper
+              variant="outlined"
+              className="add-tag"
+              sx={{
+                p: 0.25,
+                display: "flex",
+                alignItems: "center",
+                minWidth: 0,
               }}
-              sx={{ pl: 1, pr: 0.5, fontSize: 14, width: 140 }}
-            />
-            <Tooltip title="Add tag">
-              <IconButton
-                size="small"
-                onClick={() => {
-                  onAddTag(node.id, newTag);
-                  setNewTag("");
+            >
+              <InputBase
+                placeholder="Add tag"
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onAddTag(node.id, newTag);
+                    setNewTag("");
+                  }
                 }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Paper>
-        </Stack>
-      }>
-        <ListItemButton onClick={() => (hasChildren ? toggle(node.id) : undefined)}>
+                sx={{ pl: 1, pr: 0.5, fontSize: 14, width: 140 }}
+              />
+              <Tooltip title="Add tag">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    onAddTag(node.id, newTag);
+                    setNewTag("");
+                  }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Paper>
+          </Stack>
+        }
+      >
+        <ListItemButton
+          onClick={() => (hasChildren ? toggle(node.id) : undefined)}
+        >
           <ListItemIcon sx={{ minWidth: 32 }}>
             {node.type === "folder" ? (
-              isExpanded ? <FolderOpenIcon /> : <FolderIcon />
+              isExpanded ? (
+                <FolderOpenIcon />
+              ) : (
+                <FolderIcon />
+              )
             ) : (
               <DescriptionIcon />
             )}
@@ -116,16 +134,20 @@ function NodeRow({
           <ListItemText
             primary={
               <Stack direction="row" alignItems="center" spacing={1}>
-                {node.type === "folder" && (
-                  isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />
-                )}
+                {node.type === "folder" &&
+                  (isExpanded ? (
+                    <ExpandMoreIcon fontSize="small" />
+                  ) : (
+                    <ChevronRightIcon fontSize="small" />
+                  ))}
                 <Typography variant="body1">{node.name}</Typography>
               </Stack>
             }
           />
         </ListItemButton>
       </ListItem>
-      {hasChildren && isExpanded && (
+      {hasChildren &&
+        isExpanded &&
         (node as ArtifactFolder).children.map((c) => (
           <NodeRow
             key={c.id}
@@ -136,8 +158,7 @@ function NodeRow({
             onAddTag={onAddTag}
             onRemoveTag={onRemoveTag}
           />
-        ))
-      )}
+        ))}
       <Divider component="li" />
     </>
   );
@@ -152,7 +173,9 @@ export function ArtifactsTreeView() {
   const flat = useMemo(() => [root], [root]);
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1 }}>
+    <Box
+      sx={{ height: "100%", display: "flex", flexDirection: "column", gap: 1 }}
+    >
       <Typography variant="h6">Artifacts Tree</Typography>
       <Paper variant="outlined" sx={{ flex: 1, overflow: "auto" }}>
         <List dense disablePadding>

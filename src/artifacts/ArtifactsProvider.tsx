@@ -46,7 +46,6 @@ function saveTagMap(tags: Record<string, string[]>) {
 
 export function ArtifactsProvider({ children }: { children: React.ReactNode }) {
   const [root, setRoot] = useState<ArtifactFolder>(() => {
-
     const tree = cloneTree(sampleArtifacts) as ArtifactFolder;
 
     const tagMap = loadTagMap();
@@ -84,7 +83,10 @@ export function ArtifactsProvider({ children }: { children: React.ReactNode }) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [root]);
 
-  function updateTag(artifactId: string, updater: (tags: string[]) => string[]) {
+  function updateTag(
+    artifactId: string,
+    updater: (tags: string[]) => string[],
+  ) {
     setRoot((prev) => {
       const copy = cloneTree(prev) as ArtifactFolder;
       const map = new Map<string, Artifact>();
@@ -117,11 +119,16 @@ export function ArtifactsProvider({ children }: { children: React.ReactNode }) {
     [root, getById, allTags],
   );
 
-  return <ArtifactsContext.Provider value={value}>{children}</ArtifactsContext.Provider>;
+  return (
+    <ArtifactsContext.Provider value={value}>
+      {children}
+    </ArtifactsContext.Provider>
+  );
 }
 
 export function useArtifacts(): ArtifactsContextValue {
   const ctx = useContext(ArtifactsContext);
-  if (!ctx) throw new Error("useArtifacts must be used within ArtifactsProvider");
+  if (!ctx)
+    throw new Error("useArtifacts must be used within ArtifactsProvider");
   return ctx;
 }

@@ -232,12 +232,9 @@ export function SchemaERD({ schema, data, onNavigate }: SchemaERDProps) {
       position: { x: 0, y: 0 },
     };
   }
-  const initialNodes: Node[] = useMemo(
-    () => {
-      return graph.nodes.map<Node>(mapInitialNode);
-    },
-    [graph.nodes],
-  );
+  const initialNodes: Node[] = useMemo(() => {
+    return graph.nodes.map<Node>(mapInitialNode);
+  }, [graph.nodes]);
 
   function mapInitialEdge(e: GraphEdge): Edge {
     return {

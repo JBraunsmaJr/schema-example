@@ -4,7 +4,9 @@ import { type JsonSchema, type SchemaField } from "./types";
  * Derive enum from oneOf and recurse into objects/keys
  * @param node
  */
-export function normalizeSchema<T extends JsonSchema | SchemaField>(node: T): T {
+export function normalizeSchema<T extends JsonSchema | SchemaField>(
+  node: T,
+): T {
   function visit(field: SchemaField): SchemaField {
     let out = field;
 

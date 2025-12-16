@@ -26,9 +26,10 @@ import type { JsonSchema, SchemaField } from "./schema/types";
 import { SchemaERD } from "./erd/SchemaERD";
 import { ArtifactsTreeView } from "./artifacts/ArtifactsTreeView";
 import { ArtifactsTagsView } from "./artifacts/ArtifactsTagsView";
+import SchemaPlayground from "./playground/SchemaPlayground";
 
 interface TopbarProps {
-  view: "form" | "erd" | "artifacts-tree" | "artifacts-tags";
+  view: "form" | "erd" | "artifacts-tree" | "artifacts-tags" | "playground";
   mode: "system" | "light" | "dark";
   handleViewChange: (e: unknown, val: TopbarProps["view"] | null) => void;
   handleModeChange: (e: SelectChangeEvent) => void;
@@ -66,6 +67,7 @@ function Topbar({
           <ToggleButton value="erd">ERD</ToggleButton>
           <ToggleButton value="artifacts-tree">Artifacts Tree</ToggleButton>
           <ToggleButton value="artifacts-tags">Artifacts Tags</ToggleButton>
+          <ToggleButton value="playground">Playground</ToggleButton>
         </ToggleButtonGroup>
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="theme-mode-label">Theme</InputLabel>
@@ -86,7 +88,12 @@ function Topbar({
 }
 
 function App() {
-  type ViewMode = "form" | "erd" | "artifacts-tree" | "artifacts-tags";
+  type ViewMode =
+    | "form"
+    | "erd"
+    | "artifacts-tree"
+    | "artifacts-tags"
+    | "playground";
   const [view, setView] = useState<ViewMode>("form");
   type Mode = "light" | "dark" | "system";
   function initMode(): Mode {
@@ -271,6 +278,7 @@ function App() {
   }
 
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [highlightPath, setHighlightPath] = useState<string | null>(null);
   const toc = useMemo(
     function () {
       return buildTocExisting(testSchema as JsonSchema, formData, [], 0);
@@ -327,6 +335,9 @@ function App() {
   function createTocClick(id: string) {
     function onClick() {
       scrollToId(id);
+      const path = id.startsWith("section-") ? id.slice("section-".length) : id;
+      setHighlightPath(path);
+      window.setTimeout(() => setHighlightPath(null), 1500);
     }
     return onClick;
   }
@@ -385,6 +396,7 @@ function App() {
                 schema={testSchema as JsonSchema}
                 onErrorsChange={setErrors}
                 onDataChange={setFormData}
+                highlightPath={highlightPath}
               />
             </Box>
 
@@ -413,6 +425,21 @@ function App() {
                 )}
               </Paper>
             </Box>
+          </Box>
+        </Container>
+      ) : view === "playground" ? (
+        <Container maxWidth="xl">
+          <Box sx={{ my: 4 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"Schema Playground"}
+            />
+            <Paper sx={{ p: 2 }}>
+              <SchemaPlayground />
+            </Paper>
           </Box>
         </Container>
       ) : view === "erd" ? (

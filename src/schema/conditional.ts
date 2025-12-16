@@ -32,13 +32,19 @@ export function isValidAgainst(schema: SchemaField, data: unknown): boolean {
           if (childSchema.enum) {
             if (!childSchema.enum.some((x) => x === v)) return false;
           }
-          if (Object.prototype.hasOwnProperty.call(childSchema as any, "const")) {
+          if (
+            Object.prototype.hasOwnProperty.call(childSchema as any, "const")
+          ) {
             // We don't type `const` in SchemaField; `if` may include it.
             const constVal = (childSchema as any).const;
             if (v !== constVal) return false;
           }
 
-          if (childSchema.type === "object" && typeof v === "object" && v !== null) {
+          if (
+            childSchema.type === "object" &&
+            typeof v === "object" &&
+            v !== null
+          ) {
             if (!isValidAgainst(childSchema, v)) return false;
           }
         }
@@ -50,14 +56,18 @@ export function isValidAgainst(schema: SchemaField, data: unknown): boolean {
   if (t === "array") {
     if (!Array.isArray(data)) return false;
     if (schema.items && data.length > 0) {
-      return data.every((item) => isValidAgainst(schema.items as SchemaField, item));
+      return data.every((item) =>
+        isValidAgainst(schema.items as SchemaField, item),
+      );
     }
     return true;
   }
 
   if (t === "string") return typeof data === "string";
-  if (t === "number") return typeof data === "number" && Number.isFinite(data as number);
-  if (t === "integer") return typeof data === "number" && Number.isInteger(data as number);
+  if (t === "number")
+    return typeof data === "number" && Number.isFinite(data as number);
+  if (t === "integer")
+    return typeof data === "number" && Number.isInteger(data as number);
   if (t === "boolean") return typeof data === "boolean";
 
   return true;
@@ -75,18 +85,27 @@ export function isValidAgainst(schema: SchemaField, data: unknown): boolean {
  * @param base
  * @param overlay
  */
-export function mergeSchemas(base: SchemaField, overlay: SchemaField): SchemaField {
+export function mergeSchemas(
+  base: SchemaField,
+  overlay: SchemaField,
+): SchemaField {
   let out: SchemaField = { ...base, ...overlay };
 
   if (base.required || overlay.required) {
-    const set = new Set([...(base.required ?? []), ...(overlay.required ?? [])]);
+    const set = new Set([
+      ...(base.required ?? []),
+      ...(overlay.required ?? []),
+    ]);
     out.required = Array.from(set);
   }
 
   if (base.type === "object" || overlay.type === "object") {
     const baseProps = base.properties ?? {};
     const overProps = overlay.properties ?? {};
-    const allKeys = new Set([...Object.keys(baseProps), ...Object.keys(overProps)]);
+    const allKeys = new Set([
+      ...Object.keys(baseProps),
+      ...Object.keys(overProps),
+    ]);
     const merged: Record<string, SchemaField> = {};
     for (const k of allKeys) {
       const b = baseProps[k];
@@ -97,7 +116,10 @@ export function mergeSchemas(base: SchemaField, overlay: SchemaField): SchemaFie
     out = { ...out, type: "object", properties: merged };
   }
 
-  if ((base.type === "array" || overlay.type === "array") && (base.items || overlay.items)) {
+  if (
+    (base.type === "array" || overlay.type === "array") &&
+    (base.items || overlay.items)
+  ) {
     const b = base.items ?? overlay.items!;
     const o = overlay.items ?? base.items!;
     out = { ...out, type: "array", items: mergeSchemas(b!, o!) };
@@ -129,9 +151,10 @@ export function resolveEffectiveSchema<T extends JsonSchema | SchemaField>(
 
     if (working.type === "object" && working.properties) {
       const nextProps: Record<string, SchemaField> = {};
-      const obj = (typeof value === "object" && value !== null && !Array.isArray(value))
-        ? (value as Record<string, unknown>)
-        : {};
+      const obj =
+        typeof value === "object" && value !== null && !Array.isArray(value)
+          ? (value as Record<string, unknown>)
+          : {};
       for (const [k, v] of Object.entries(working.properties)) {
         nextProps[k] = visit(v, obj[k]);
       }
@@ -148,9 +171,10 @@ export function resolveEffectiveSchema<T extends JsonSchema | SchemaField>(
 
   if ((node as any).type === "object" && (node as JsonSchema).properties) {
     const schema = node as JsonSchema;
-    const obj = (typeof data === "object" && data !== null && !Array.isArray(data))
-      ? (data as Record<string, unknown>)
-      : {};
+    const obj =
+      typeof data === "object" && data !== null && !Array.isArray(data)
+        ? (data as Record<string, unknown>)
+        : {};
 
     // Apply root-level if/then/else by treating the root as a SchemaField
     let workingRoot: SchemaField = {
@@ -198,12 +222,16 @@ export function resolveEffectiveSchema<T extends JsonSchema | SchemaField>(
  * @param schema
  * @param data
  */
-export function pruneDataAgainstSchema(schema: SchemaField | JsonSchema, data: unknown): unknown {
+export function pruneDataAgainstSchema(
+  schema: SchemaField | JsonSchema,
+  data: unknown,
+): unknown {
   if ((schema as SchemaField).type === "object" && (schema as any).properties) {
     const props = (schema as any).properties as Record<string, SchemaField>;
-    const src = (typeof data === "object" && data !== null && !Array.isArray(data))
-      ? (data as Record<string, unknown>)
-      : {};
+    const src =
+      typeof data === "object" && data !== null && !Array.isArray(data)
+        ? (data as Record<string, unknown>)
+        : {};
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(props)) {
       const childSchema = props[key];
@@ -211,7 +239,10 @@ export function pruneDataAgainstSchema(schema: SchemaField | JsonSchema, data: u
     }
     return out;
   }
-  if ((schema as SchemaField).type === "array" && (schema as SchemaField).items) {
+  if (
+    (schema as SchemaField).type === "array" &&
+    (schema as SchemaField).items
+  ) {
     const itemsSchema = (schema as SchemaField).items!;
     const arr = Array.isArray(data) ? data : [];
     return arr.map((item) => pruneDataAgainstSchema(itemsSchema, item));
