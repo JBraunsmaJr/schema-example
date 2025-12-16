@@ -24,9 +24,11 @@ import testSchema from "./test-schema.json";
 import { DynamicForm } from "./schema/DynamicForm";
 import type { JsonSchema, SchemaField } from "./schema/types";
 import { SchemaERD } from "./erd/SchemaERD";
+import { ArtifactsTreeView } from "./artifacts/ArtifactsTreeView";
+import { ArtifactsTagsView } from "./artifacts/ArtifactsTagsView";
 
 interface TopbarProps {
-  view: "form" | "erd";
+  view: "form" | "erd" | "artifacts-tree" | "artifacts-tags";
   mode: "system" | "light" | "dark";
   handleViewChange: (e: unknown, val: TopbarProps["view"] | null) => void;
   handleModeChange: (e: SelectChangeEvent) => void;
@@ -62,6 +64,8 @@ function Topbar({
         >
           <ToggleButton value="form">Form</ToggleButton>
           <ToggleButton value="erd">ERD</ToggleButton>
+          <ToggleButton value="artifacts-tree">Artifacts Tree</ToggleButton>
+          <ToggleButton value="artifacts-tags">Artifacts Tags</ToggleButton>
         </ToggleButtonGroup>
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="theme-mode-label">Theme</InputLabel>
@@ -82,7 +86,7 @@ function Topbar({
 }
 
 function App() {
-  type ViewMode = "form" | "erd";
+  type ViewMode = "form" | "erd" | "artifacts-tree" | "artifacts-tags";
   const [view, setView] = useState<ViewMode>("form");
   type Mode = "light" | "dark" | "system";
   function initMode(): Mode {
@@ -370,7 +374,7 @@ function App() {
             {/* Main */}
             <Box>
               <Topbar
-                view={"form"}
+                view={view}
                 mode={mode}
                 handleViewChange={handleViewChange}
                 handleModeChange={handleModeChange}
@@ -411,8 +415,8 @@ function App() {
             </Box>
           </Box>
         </Container>
-      ) : (
-        <Container maxWidth={"xl"} sx={{m: 2}}>
+      ) : view === "erd" ? (
+        <Container maxWidth={"xl"} sx={{ m: 2 }}>
           <Box
             sx={{
               width: "92vw",
@@ -426,7 +430,7 @@ function App() {
             }}
           >
             <Topbar
-              view={"erd"}
+              view={view}
               mode={mode}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
@@ -444,6 +448,36 @@ function App() {
                 />
               </Box>
             </Box>
+          </Box>
+        </Container>
+      ) : view === "artifacts-tree" ? (
+        <Container maxWidth="lg">
+          <Box sx={{ my: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"Artifacts"}
+            />
+            <Paper sx={{ p: 2, minHeight: "70vh" }}>
+              <ArtifactsTreeView />
+            </Paper>
+          </Box>
+        </Container>
+      ) : (
+        <Container maxWidth="lg">
+          <Box sx={{ my: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"Artifacts"}
+            />
+            <Paper sx={{ p: 2, minHeight: "70vh" }}>
+              <ArtifactsTagsView />
+            </Paper>
           </Box>
         </Container>
       )}
