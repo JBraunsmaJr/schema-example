@@ -293,7 +293,6 @@ export function SchemaERD({ schema, data, onNavigate }: SchemaERDProps) {
           defaultEdgeOptions={{ type: "step" }}
         >
           <Background />
-          <MiniMap pannable zoomable />
           <Controls />
         </ReactFlow>
       </div>
