@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Snippet } from "./types.ts";
 import type * as Monaco from "monaco-editor";
 import Editor, { type OnMount } from "@monaco-editor/react";
@@ -18,44 +18,46 @@ interface SnippetEditorProps {
 }
 
 export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
-  const [newSnippet, setNewSnippet] = useState<Snippet>({
-    id: "",
-    label: "",
-    insertText: "",
-    description: "",
-  });
   const [saved, setSaved] = useState<string>("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState<string>("");
+  const [descDraft, setDescDraft] = useState<string>("");
+  const [bodyDraft, setBodyDraft] = useState<string>("");
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const saveTimerRef = useRef<number | null>(null);
 
-  const [jsonDraft, setJsonDraft] = useState<string>("[]");
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
-  function validateAndNormalizeSnippet(snippet: Snippet): string[] {
-    const errors: string[] = [];
-    if (!snippet.label) errors.push("Label is required");
-    if (!snippet.insertText) errors.push("Insert text is required");
-    if (!snippet.description) errors.push("Description is required");
-    return errors;
+  function persist(snips: Snippet[]) {
+    const json = JSON.stringify(snips);
+    localStorage.setItem(`${snippetLanguage}-monaco-snippets`, json);
+    setSaved(json);
   }
 
-  function addSnippet(snippet: Snippet) {
-    const errors = validateAndNormalizeSnippet(snippet);
-    if (errors.length) {
-      alert(errors.join("\n"));
-      return;
-    }
-    const withId: Snippet = { ...snippet, id: Date.now().toString() };
-    const newSaved = JSON.stringify((storedSnippets || []).concat(withId));
-    localStorage.setItem(`${snippetLanguage}-monaco-snippets`, newSaved);
-    setSaved(newSaved);
-    setNewSnippet({ label: "", insertText: "", description: "", id: "" });
+  function addSnippet() {
+    const nowId = `${Date.now()}`;
+    const next: Snippet = {
+      id: nowId,
+      label: "New Snippet",
+      description: "",
+      insertText: "${1:placeholder}",
+    };
+    const list = (storedSnippets || []).concat(next);
+    persist(list);
+    setSelectedId(nowId);
+    setLabelDraft(next.label);
+    setDescDraft(next.description);
+    setBodyDraft(next.insertText);
   }
 
   function removeSnippet(snippet: Snippet) {
-    const newSaved = JSON.stringify(
-      storedSnippets?.filter((s) => s.id !== snippet.id) || [],
-    );
-    localStorage.setItem(`${snippetLanguage}-monaco-snippets`, newSaved);
-    setSaved(newSaved);
+    const list = (storedSnippets || []).filter((s) => s.id !== snippet.id);
+    persist(list);
+    if (selectedId === snippet.id) {
+      const first = list[0];
+      setSelectedId(first ? first.id : null);
+      setLabelDraft(first ? first.label : "");
+      setDescDraft(first ? first.description : "");
+      setBodyDraft(first ? first.insertText : "");
+    }
   }
 
   const storedSnippets = useMemo(() => {
@@ -72,33 +74,91 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
   }, [snippetLanguage, saved]);
 
   useEffect(
-    function saveToStorage() {
-      localStorage.setItem(
-        `${snippetLanguage}-monaco-snippets`,
-        JSON.stringify(storedSnippets),
-      );
+    function initSelectionAndDrafts() {
+      const first = storedSnippets[0] ?? null;
+      const id = selectedId && storedSnippets.find((s) => s.id === selectedId)
+        ? selectedId
+        : first?.id ?? null;
+      setSelectedId(id);
+      if (id) {
+        const s = storedSnippets.find((x) => x.id === id)!;
+        setLabelDraft(s.label);
+        setDescDraft(s.description);
+        setBodyDraft(s.insertText);
+      } else {
+        setLabelDraft("");
+        setDescDraft("");
+        setBodyDraft("");
+      }
     },
-    [storedSnippets, snippetLanguage],
-  );
-
-  // Sync JSON draft when storedSnippets changes
-  useEffect(
-    function syncDraftFromState() {
-      setJsonDraft(JSON.stringify(storedSnippets, null, 2));
-      setJsonError(null);
-    },
-    [storedSnippets],
+    [snippetLanguage, saved],
   );
 
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const providerRef = useRef<Monaco.IDisposable | null>(null);
+  const providerVarsRef = useRef<Monaco.IDisposable | null>(null);
+  const tokensProviderRef = useRef<Monaco.IDisposable | null>(null);
+  const diagOwnerRef = useRef<string>("snippet-body-owner");
+  const registeredLangsRef = useRef<Set<string>>(new Set());
 
   function registerSnippets(monaco: typeof Monaco) {
     if (providerRef.current) providerRef.current.dispose();
+    if (providerVarsRef.current) providerVarsRef.current.dispose();
+    if(tokensProviderRef.current) tokensProviderRef.current.dispose();
+
+    monaco.editor.defineTheme("snippet-theme", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "snippet.placeholder", foreground: "ffb86c", fontStyle: "bold"},
+        { token: "snippet.variable", foreground: "8be9fd", fontStyle: "italic"}
+      ],
+      colors: {}
+    })
+
+    const langId = `${snippetLanguage}-snippet-body`;
+
+    // Ensure language is registered before setting tokens provider
+    if (!registeredLangsRef.current.has(langId)) {
+      try {
+        monaco.languages.register({ id: langId });
+      } catch (_e) {
+        // ignore if already registered by another mount
+      }
+      registeredLangsRef.current.add(langId);
+    }
+
+    tokensProviderRef.current = monaco.languages.setMonarchTokensProvider(langId, {
+      tokenizer: {
+        root:[
+            // Snippet placeholders: ${1:default}, $1, ${variable}
+            [/\$\{[0-9]+:[^}]*\}/, "snippet.placeholder"],
+            [/\$\{[0-9]+\}/, "snippet.placeholder"],
+            [/\$[0-9]+/, "snippet.placeholder"],
+            [/\$\{[A-Z_][A-Z0-9_]*\}/, "snippet.variable"],
+            [/\$\{[a-zA-Z_][a-zA-Z0-9_]*\}/, "snippet.variable"],
+            // delimiters for visibility
+            [/\$|\{|\}/, "delimiter"]
+        ]
+      }
+    })
+
+    monaco.editor.setTheme("snippet-theme");
+
+    // Ensure the model is using our custom language id
+    const model = editorRef.current?.getModel();
+    if (model) {
+      try {
+        monaco.editor.setModelLanguage(model, langId);
+      } catch (_e) {}
+    }
+
+    // Provide completions for common placeholder constructs and variables
     providerRef.current = monaco.languages.registerCompletionItemProvider(
-      snippetLanguage,
+      langId,
       {
+        triggerCharacters: ["$", "{"],
         provideCompletionItems(model, position) {
           const word = model.getWordUntilPosition(position);
           const range = {
@@ -107,19 +167,92 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
             startColumn: word.startColumn,
             endColumn: word.endColumn,
           };
-          const suggestions: Monaco.languages.CompletionItem[] =
-            storedSnippets.map(function mapToSuggestion(snippet) {
-              return {
-                label: snippet.label,
-                kind: monaco.languages.CompletionItemKind.Snippet,
-                insertText: snippet.insertText,
-                insertTextRules:
-                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: snippet.description,
-                detail: `Snippet: ${snippet.label}`,
-                range: range,
-              } as Monaco.languages.CompletionItem;
-            });
+          const variables = [
+            "TM_FILENAME",
+            "TM_FILENAME_BASE",
+            "TM_DIRECTORY",
+            "CURRENT_YEAR",
+            "CURRENT_MONTH",
+            "CURRENT_DATE",
+            "CURRENT_HOUR",
+            "CURRENT_MINUTE",
+            "CURRENT_SECOND",
+            "CLIPBOARD",
+          ];
+
+          const suggestions: Monaco.languages.CompletionItem[] = [
+            {
+              label: "$1",
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: "$1",
+              range,
+              detail: "Tab stop 1",
+            },
+            {
+              label: "${1:placeholder}",
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: "${1:placeholder}",
+              range,
+              detail: "Tab stop with default",
+            },
+            {
+              label: "${2:name}",
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: "${2:name}",
+              range,
+              detail: "Named placeholder",
+            },
+            ...variables.map((v) => ({
+              label: `
+${`\${${v}}`}`,
+              kind: monaco.languages.CompletionItemKind.Variable,
+              insertText: `
+${`\${${v}}`}`,
+              range,
+              detail: `Variable ${v}`,
+            })) as unknown as Monaco.languages.CompletionItem[],
+          ];
+          // Ensure insertTextRules for snippet entries
+          suggestions.forEach((s) => {
+            (s as any).insertTextRules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+          });
+          return { suggestions };
+        },
+      },
+    );
+
+    // Extra provider to ensure clean variable suggestions without formatting issues
+    providerVarsRef.current = monaco.languages.registerCompletionItemProvider(
+      langId,
+      {
+        triggerCharacters: ["$", "{"],
+        provideCompletionItems(_model, position) {
+          const variables = [
+            "TM_FILENAME",
+            "TM_FILENAME_BASE",
+            "TM_DIRECTORY",
+            "CURRENT_YEAR",
+            "CURRENT_MONTH",
+            "CURRENT_DATE",
+            "CURRENT_HOUR",
+            "CURRENT_MINUTE",
+            "CURRENT_SECOND",
+            "CLIPBOARD",
+          ];
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endColumn: position.column,
+          };
+          const suggestions: Monaco.languages.CompletionItem[] = variables.map((v) => ({
+            label: `\${${v}}`,
+            kind: monaco.languages.CompletionItemKind.Variable,
+            insertText: `\${${v}}`,
+            range,
+            detail: `Variable ${v}`,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          } as unknown as Monaco.languages.CompletionItem));
           return { suggestions };
         },
       },
@@ -131,122 +264,116 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
       if (monacoRef.current && editorRef.current) {
         registerSnippets(monacoRef.current);
       }
+      return () => {
+        if (providerRef.current) providerRef.current.dispose();
+        if (providerVarsRef.current) providerVarsRef.current.dispose();
+        if (tokensProviderRef.current) tokensProviderRef.current.dispose();
+      };
     },
-    [storedSnippets, snippetLanguage],
+    [snippetLanguage],
   );
-
-  function configureJsonSchema(monaco: typeof Monaco) {
-    try {
-      const schemaUri = "inmemory://model/snippets.schema.json";
-      const snippetSchema = {
-        $id: schemaUri,
-        type: "array",
-        title: "Snippet List",
-        items: {
-          type: "object",
-          required: ["label", "insertText", "description"],
-          properties: {
-            id: { type: "string", description: "Generated id" },
-            label: { type: "string", description: "Completion label" },
-            insertText: {
-              type: "string",
-              description: "Snippet body; supports Monaco snippet syntax",
-            },
-            description: { type: "string", description: "Details" },
-          },
-          additionalProperties: false,
-        },
-      } as const;
-
-      // Access via a narrowed shape to satisfy TS across Monaco versions
-      const jsonNs = (
-        monaco.languages as unknown as {
-          json: {
-            jsonDefaults: { setDiagnosticsOptions: (opts: unknown) => void };
-          };
-        }
-      ).json;
-      jsonNs.jsonDefaults.setDiagnosticsOptions({
-        validate: true,
-        allowComments: true,
-        enableSchemaRequest: false,
-        schemas: [
-          {
-            uri: schemaUri,
-            fileMatch: ["*snippets.json"],
-            schema: snippetSchema as unknown,
-          },
-        ],
-      });
-    } catch (_e) {
-      // swallow configuration errors to avoid breaking editor
-    }
-  }
 
   const handleDidMount: OnMount = function onMount(editor, monaco) {
     editorRef.current =
       editor as unknown as Monaco.editor.IStandaloneCodeEditor;
     monacoRef.current = monaco as unknown as typeof Monaco;
 
-    configureJsonSchema(monacoRef.current);
+    // We only need snippet body language/registrations here
     registerSnippets(monacoRef.current);
 
     editor.updateOptions({
       wordWrap: "on",
       minimap: { enabled: false },
       suggest: { snippetsPreventQuickSuggestions: false },
-      quickSuggestions: { other: true, comments: false, strings: false },
+      quickSuggestions: { other: true, comments: true, strings: true },
     });
   };
 
-  function handleJsonChange(value: string | undefined) {
-    const v = value ?? "";
-    setJsonDraft(v);
-    try {
-      const parsed = JSON.parse(v) as unknown;
-      if (Array.isArray(parsed)) {
-        // Try to coerce into Snippet[]; generate ids if missing
-        const next: Snippet[] = [];
-        for (let i = 0; i < parsed.length; i++) {
-          const obj = parsed[i] as Record<string, unknown>;
-          const candidate: Snippet = {
-            id:
-              typeof obj.id === "string" && obj.id
-                ? (obj.id as string)
-                : `${Date.now()}-${i}`,
-            label: String(obj.label ?? ""),
-            insertText: String(obj.insertText ?? ""),
-            description: String(obj.description ?? ""),
-          };
-          const errs = validateAndNormalizeSnippet(candidate);
-          if (errs.length === 0) next.push(candidate);
-        }
-
-        localStorage.setItem(
-          `${snippetLanguage}-monaco-snippets`,
-          `${JSON.stringify(next, null, 2)}`,
-        );
-        setSaved(`${JSON.stringify(next, null, 2)}`);
-        setJsonError(null);
-      } else {
-        setJsonError("Root must be an array of snippets");
+  function validateBodyAndMark() {
+    const monaco = monacoRef.current;
+    const editor = editorRef.current;
+    if (!monaco || !editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+    const text = bodyDraft;
+    const markers: Monaco.editor.IMarkerData[] = [] as any;
+    // Simple validation: detect '${' without a closing '}'
+    const stack: number[] = [];
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '$' && text[i + 1] === '{') {
+        stack.push(i);
       }
-    } catch (e) {
-      setJsonError((e as Error).message);
+      if (text[i] === '}') {
+        stack.pop();
+      }
     }
+    if (stack.length > 0) {
+      const idx = stack[stack.length - 1];
+      const pos = model.getPositionAt(idx);
+      markers.push({
+        severity: 4, // Warning
+        message: "Unclosed placeholder: missing '}'",
+        startLineNumber: pos.lineNumber,
+        startColumn: pos.column,
+        endLineNumber: pos.lineNumber,
+        endColumn: pos.column + 2,
+      } as any);
+    }
+    // Invalid negative indices like $-1
+    const negIdx = /\$-\d+/g;
+    let m: RegExpExecArray | null;
+    while ((m = negIdx.exec(text))) {
+      const start = m.index;
+      const pos = model.getPositionAt(start);
+      markers.push({
+        severity: 4,
+        message: "Tab stop index must be a non-negative integer",
+        startLineNumber: pos.lineNumber,
+        startColumn: pos.column,
+        endLineNumber: pos.lineNumber,
+        endColumn: pos.column + m[0].length,
+      } as any);
+    }
+    monaco.editor.setModelMarkers(model, diagOwnerRef.current, markers);
   }
 
-  function handleFieldChange(
-    key: keyof Omit<Snippet, "id">,
-  ): (e: React.ChangeEvent<HTMLInputElement>) => void {
-    function handler(e: React.ChangeEvent<HTMLInputElement>) {
-      setNewSnippet((prev) => ({ ...prev, [key]: e.target.value }) as Snippet);
-    }
-    return handler;
-  }
+  // Debounce save of drafts into selected snippet
+  useEffect(
+    function debouncedPersist() {
+      if (!selectedId) return;
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      setIsSaving(true);
+      saveTimerRef.current = window.setTimeout(() => {
+        const idx = storedSnippets.findIndex((s) => s.id === selectedId);
+        if (idx >= 0) {
+          const next = storedSnippets.slice();
+          next[idx] = {
+            ...next[idx],
+            label: labelDraft,
+            description: descDraft,
+            insertText: bodyDraft,
+          };
+          persist(next);
+        }
+        setIsSaving(false);
+        validateBodyAndMark();
+      }, 500);
+      return () => {
+        if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+      };
+    },
+    [labelDraft, descDraft, bodyDraft, selectedId, snippetLanguage],
+  );
 
-  function handleAddClick() {
-    addSnippet(newSnippet);
+  function handleSelect(snippet: Snippet) {
+    setSelectedId(snippet.id);
+    setLabelDraft(snippet.label);
+    setDescDraft(snippet.description);
+    setBodyDraft(snippet.insertText);
+    // Validate newly loaded content
+    setTimeout(validateBodyAndMark, 0);
   }
 
   function renderSnippetRow(snippet: Snippet) {
@@ -254,7 +381,8 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
       <Paper
         key={snippet.id}
         variant="outlined"
-        sx={{ p: 1, display: "flex", alignItems: "center", gap: 2 }}
+        onClick={() => handleSelect(snippet)}
+        sx={{ p: 1, display: "flex", alignItems: "center", gap: 2, cursor: "pointer", borderColor: selectedId === snippet.id ? 'primary.main' : undefined, bgcolor: selectedId === snippet.id ? 'action.hover' : undefined }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="subtitle2" noWrap>
@@ -280,92 +408,50 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1fr 1.6fr" },
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Paper sx={{ p: 2 }} elevation={2}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Add Snippet ({snippetLanguage})
-            </Typography>
-            <TextField
-              fullWidth
-              label="Label"
-              value={newSnippet.label}
-              onChange={handleFieldChange("label")}
-              margin="dense"
-            />
-            <TextField
-              fullWidth
-              label="Description"
-              value={newSnippet.description}
-              onChange={handleFieldChange("description")}
-              margin="dense"
-            />
-            <TextField
-              fullWidth
-              label="Insert Text"
-              value={newSnippet.insertText}
-              onChange={handleFieldChange("insertText")}
-              margin="dense"
-              multiline
-              minRows={3}
-            />
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
-              <Button variant="contained" onClick={handleAddClick}>
-                Add
-              </Button>
-            </Box>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Saved Snippets
-            </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {storedSnippets.length === 0 ? (
-                <Typography variant="body2" sx={{ opacity: 0.7 }}>
-                  No snippets yet.
-                </Typography>
-              ) : (
-                storedSnippets.map(renderSnippetRow)
-              )}
-            </Box>
-          </Paper>
-        </Box>
-        <Box>
-          <Paper
-            sx={{ p: 1, height: 520, display: "flex", flexDirection: "column" }}
-            elevation={2}
-          >
-            <Typography variant="h6" sx={{ px: 1, pt: 1 }}>
-              Raw JSON
-            </Typography>
-            <Box sx={{ flex: 1, minHeight: 0 }}>
-              <Editor
-                height="100%"
-                defaultLanguage="json"
-                value={jsonDraft}
-                theme="vs-dark"
-                onChange={handleJsonChange}
-                onMount={handleDidMount}
-                path="user://snippets.json"
-                options={{ fontSize: 13 }}
-              />
-            </Box>
-            {jsonError ? (
-              <Typography
-                color="error"
-                variant="caption"
-                sx={{ px: 1, py: 0.5 }}
-              >
-                {jsonError}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 2fr" }, gap: 2 }}>
+        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }} elevation={2}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6">Snippets ({snippetLanguage})</Typography>
+            <Button variant="contained" size="small" onClick={addSnippet}>Add</Button>
+          </Box>
+          <Divider sx={{ my: 1 }} />
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 520, overflow: 'auto' }}>
+            {storedSnippets.length === 0 ? (
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>No snippets yet.</Typography>
+            ) : (
+              storedSnippets.map(renderSnippetRow)
+            )}
+          </Box>
+        </Paper>
+
+        <Paper sx={{ p: 2, height: 520, display: 'flex', flexDirection: 'column', gap: 1 }} elevation={2}>
+          <Typography variant="h6">Editor</Typography>
+          {selectedId ? (
+            <>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
+                <TextField label="Label" value={labelDraft} onChange={(e) => setLabelDraft(e.target.value)} size="small" />
+                <TextField label="Description" value={descDraft} onChange={(e) => setDescDraft(e.target.value)} size="small" />
+              </Box>
+              <Box sx={{ flex: 1, minHeight: 0 }}>
+                <Editor
+                  height="100%"
+                  value={bodyDraft}
+                  theme="snippet-theme"
+                  onChange={(v) => setBodyDraft(v ?? "")}
+                  onMount={handleDidMount}
+                  language={`${snippetLanguage}-snippet-body`}
+                  path={`user://snippet/${selectedId}.${snippetLanguage}.snippet`}
+                  options={{ fontSize: 13 }}
+                />
+              </Box>
+              <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                {isSaving ? 'Saving…' : 'Saved'}
               </Typography>
-            ) : null}
-          </Paper>
-        </Box>
+            </>
+          ) : (
+            <Typography variant="body2" sx={{ opacity: 0.7, mt: 2 }}>Select a snippet to edit, or click Add.</Typography>
+          )}
+        </Paper>
       </Box>
     </Box>
   );
