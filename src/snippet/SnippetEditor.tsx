@@ -108,7 +108,6 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
   const providerRef = useRef<Monaco.IDisposable | null>(null);
   const providerVarsRef = useRef<Monaco.IDisposable | null>(null);
   const tokensProviderRef = useRef<Monaco.IDisposable | null>(null);
-  const diagOwnerRef = useRef<string>("snippet-body-owner");
   const registeredLangsRef = useRef<Set<string>>(new Set());
 
   function registerSnippets(monaco: typeof Monaco) {
@@ -212,18 +211,6 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
             startColumn: word.startColumn,
             endColumn: word.endColumn,
           };
-          const variables = [
-            "TM_FILENAME",
-            "TM_FILENAME_BASE",
-            "TM_DIRECTORY",
-            "CURRENT_YEAR",
-            "CURRENT_MONTH",
-            "CURRENT_DATE",
-            "CURRENT_HOUR",
-            "CURRENT_MINUTE",
-            "CURRENT_SECOND",
-            "CLIPBOARD",
-          ];
 
           const suggestions: Monaco.languages.CompletionItem[] = [
             {
@@ -247,13 +234,6 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
               range,
               detail: "Named placeholder",
             },
-            ...(variables.map((v) => ({
-              label: `${`\${${v}}`}`,
-              kind: monaco.languages.CompletionItemKind.Variable,
-              insertText: `${`\${${v}}`}`,
-              range,
-              detail: `Variable ${v}`,
-            })) as unknown as Monaco.languages.CompletionItem[]),
           ];
           // Ensure insertTextRules for snippet entries
           suggestions.forEach((s) => {
