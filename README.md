@@ -3,6 +3,10 @@
 This is an MVP on how to render JSON schemas in React. By leveraging dynamic form generation, to rendering an entity relationship
 diagram, we can build a rich UI.
 
+## Docs
+
+[Monaco Editor stuff](https://microsoft.github.io/monaco-editor/monarch.html)
+
 ## Main Page
 
 For large schemas, navigation via scrolling is a nightmare. To combat this, the "Sections" panel on the left allows users to
