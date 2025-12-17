@@ -24,7 +24,7 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
     insertText: "",
     description: "",
   });
-  const [saved, setSaved] = useState<string>('')
+  const [saved, setSaved] = useState<string>("");
 
   const [jsonDraft, setJsonDraft] = useState<string>("[]");
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -44,34 +44,31 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
       return;
     }
     const withId: Snippet = { ...snippet, id: Date.now().toString() };
-    const newSaved = JSON.stringify((storedSnippets || []).concat(withId))
-    localStorage.setItem(
-      `${snippetLanguage}-monaco-snippets`,
-      newSaved
-    );
-    setSaved(newSaved)
+    const newSaved = JSON.stringify((storedSnippets || []).concat(withId));
+    localStorage.setItem(`${snippetLanguage}-monaco-snippets`, newSaved);
+    setSaved(newSaved);
     setNewSnippet({ label: "", insertText: "", description: "", id: "" });
   }
 
   function removeSnippet(snippet: Snippet) {
-    const newSaved = JSON.stringify(storedSnippets?.filter((s) => s.id !== snippet.id) || [])
-    localStorage.setItem(
-      `${snippetLanguage}-monaco-snippets`,
-      newSaved,
+    const newSaved = JSON.stringify(
+      storedSnippets?.filter((s) => s.id !== snippet.id) || [],
     );
-    setSaved(newSaved)
+    localStorage.setItem(`${snippetLanguage}-monaco-snippets`, newSaved);
+    setSaved(newSaved);
   }
 
   const storedSnippets = useMemo(() => {
-    const localSaved = localStorage.getItem(`${snippetLanguage}-monaco-snippets`);
+    const localSaved = localStorage.getItem(
+      `${snippetLanguage}-monaco-snippets`,
+    );
     if (localSaved) {
       try {
         return JSON.parse(localSaved) as Snippet[];
-      } catch (_e) {
-      }
+      } catch (_e) {}
     }
 
-    return []
+    return [];
   }, [snippetLanguage, saved]);
 
   useEffect(
@@ -225,8 +222,11 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
           if (errs.length === 0) next.push(candidate);
         }
 
-        localStorage.setItem(`${snippetLanguage}-monaco-snippets`, `${JSON.stringify(next, null, 2)}`)
-        setSaved(`${JSON.stringify(next, null, 2)}`)
+        localStorage.setItem(
+          `${snippetLanguage}-monaco-snippets`,
+          `${JSON.stringify(next, null, 2)}`,
+        );
+        setSaved(`${JSON.stringify(next, null, 2)}`);
         setJsonError(null);
       } else {
         setJsonError("Root must be an array of snippets");

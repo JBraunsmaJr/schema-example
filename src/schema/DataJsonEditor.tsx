@@ -26,6 +26,8 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
 
   const [text, setText] = useState<string>(JSON.stringify(value, null, 2));
   const [error, setError] = useState<string | null>(null);
+  // Track when Monaco is ready so effects can (re)register providers safely
+  const [isMonacoReady, setIsMonacoReady] = useState(false);
 
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
@@ -105,6 +107,7 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
               } as Monaco.languages.CompletionItem;
             },
           );
+
           return { suggestions };
         },
       },
@@ -123,7 +126,11 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
       }
     }
     configureSchema(monaco, uri);
-    registerSnippets(monaco);
+    /*
+      This fixes the issue where completion items are added PER render, resulting in a bunch of
+      entries for 1 snippet
+    */
+    setIsMonacoReady(true);
   };
 
   function handleChange(val: string | undefined) {
@@ -154,21 +161,38 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
     [schema],
   );
 
-  // Re-register snippet completions if language changes or when editor gains focus
+  // Register/refresh snippet completions when Monaco is ready or language changes
   useEffect(
-    function onSnippetLangChange() {
+    function onSnippetLangOrReady() {
       const monaco = monacoRef.current;
-      if (!monaco) return;
+      if (!monaco || !isMonacoReady) return;
       registerSnippets(monaco);
       return function cleanup() {
         if (completionRef.current) completionRef.current.dispose();
         completionRef.current = null;
       };
     },
-    [snippetLanguage],
+    [snippetLanguage, isMonacoReady],
   );
 
-  // Reflect external value changes into the editor without disrupting the cursor when typing.
+  /*
+   * Ensure the provider is disposed on unmount even if language never changed
+   * Proper disposal helps prevent duplicate entries for things
+   */
+  useEffect(() => {
+    return () => {
+      if (completionRef.current) completionRef.current.dispose();
+      completionRef.current = null;
+    };
+  }, []);
+
+  /*
+    There was an issue where as a user was typing, if the text created valid JSON, the cursor would
+    yeet to the very end.
+
+    The cursor only remained if the json was unable to parse.
+    The following corrects that
+  */
   useEffect(
     function syncEditorFromExternalValue() {
       const editor = editorRef.current;
