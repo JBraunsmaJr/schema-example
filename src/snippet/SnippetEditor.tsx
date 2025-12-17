@@ -76,9 +76,10 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
   useEffect(
     function initSelectionAndDrafts() {
       const first = storedSnippets[0] ?? null;
-      const id = selectedId && storedSnippets.find((s) => s.id === selectedId)
-        ? selectedId
-        : first?.id ?? null;
+      const id =
+        selectedId && storedSnippets.find((s) => s.id === selectedId)
+          ? selectedId
+          : (first?.id ?? null);
       setSelectedId(id);
       if (id) {
         const s = storedSnippets.find((x) => x.id === id)!;
@@ -105,17 +106,30 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
   function registerSnippets(monaco: typeof Monaco) {
     if (providerRef.current) providerRef.current.dispose();
     if (providerVarsRef.current) providerVarsRef.current.dispose();
-    if(tokensProviderRef.current) tokensProviderRef.current.dispose();
+    if (tokensProviderRef.current) tokensProviderRef.current.dispose();
 
     monaco.editor.defineTheme("snippet-theme", {
       base: "vs-dark",
       inherit: true,
       rules: [
-        { token: "snippet.placeholder", foreground: "ffb86c", fontStyle: "bold"},
-        { token: "snippet.variable", foreground: "8be9fd", fontStyle: "italic"}
+        // legacy token (kept if any rule still emits it)
+        {
+          token: "snippet.placeholder",
+          foreground: "ffb86c",
+          fontStyle: "bold",
+        },
+        // new granular tokens
+        { token: "snippet.delimiter", foreground: "7f8c8d" },
+        { token: "snippet.index", foreground: "ffb86c", fontStyle: "bold" },
+        { token: "snippet.label", foreground: "c3e88d", fontStyle: "italic" },
+        {
+          token: "snippet.variable",
+          foreground: "8be9fd",
+          fontStyle: "italic",
+        },
       ],
-      colors: {}
-    })
+      colors: {},
+    });
 
     const langId = `${snippetLanguage}-snippet-body`;
 
@@ -129,20 +143,43 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
       registeredLangsRef.current.add(langId);
     }
 
-    tokensProviderRef.current = monaco.languages.setMonarchTokensProvider(langId, {
-      tokenizer: {
-        root:[
-            // Snippet placeholders: ${1:default}, $1, ${variable}
-            [/\$\{[0-9]+:[^}]*\}/, "snippet.placeholder"],
-            [/\$\{[0-9]+\}/, "snippet.placeholder"],
-            [/\$[0-9]+/, "snippet.placeholder"],
-            [/\$\{[A-Z_][A-Z0-9_]*\}/, "snippet.variable"],
-            [/\$\{[a-zA-Z_][a-zA-Z0-9_]*\}/, "snippet.variable"],
-            // delimiters for visibility
-            [/\$|\{|\}/, "delimiter"]
-        ]
-      }
-    })
+    tokensProviderRef.current = monaco.languages.setMonarchTokensProvider(
+      langId,
+      {
+        tokenizer: {
+          root: [
+            // ${ ... } placeholders → go to state
+            [/\$\{/, { token: "snippet.delimiter", next: "insidePlaceholder" }],
+            // $1, $23 tab stops split into $ (delimiter) and number (index)
+            [/\$/, { token: "snippet.delimiter", next: "afterDollar" }],
+            // consume any run of non-$ characters to make progress
+            [/[^$]+/, ""],
+            // and finally consume a single char to avoid stalling
+            [/./, ""],
+          ],
+
+          afterDollar: [
+            [/\d+/, { token: "snippet.index", next: "@pop" }],
+            ["", "", "@pop"],
+          ],
+
+          insidePlaceholder: [
+            // numeric index form: 1 or 10
+            [/\d+/, "snippet.index"],
+            // colon following index
+            [/\:/, "snippet.delimiter"],
+            // variable form like TM_FILENAME or fooBar
+            [/[_A-Za-z][_A-Za-z0-9]*/, "snippet.variable"],
+            // label text until closing brace (stop at })
+            [/[^}\n]+/, "snippet.label"],
+            // closing brace
+            [/\}/, { token: "snippet.delimiter", next: "@pop" }],
+            // safety: if nothing matched, consume one char to avoid infinite loop
+            [/./, ""],
+          ],
+        },
+      },
+    );
 
     monaco.editor.setTheme("snippet-theme");
 
@@ -202,7 +239,7 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
               range,
               detail: "Named placeholder",
             },
-            ...variables.map((v) => ({
+            ...(variables.map((v) => ({
               label: `
 ${`\${${v}}`}`,
               kind: monaco.languages.CompletionItemKind.Variable,
@@ -210,11 +247,12 @@ ${`\${${v}}`}`,
 ${`\${${v}}`}`,
               range,
               detail: `Variable ${v}`,
-            })) as unknown as Monaco.languages.CompletionItem[],
+            })) as unknown as Monaco.languages.CompletionItem[]),
           ];
           // Ensure insertTextRules for snippet entries
           suggestions.forEach((s) => {
-            (s as any).insertTextRules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+            (s as any).insertTextRules =
+              monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
           });
           return { suggestions };
         },
@@ -245,14 +283,18 @@ ${`\${${v}}`}`,
             startColumn: position.column,
             endColumn: position.column,
           };
-          const suggestions: Monaco.languages.CompletionItem[] = variables.map((v) => ({
-            label: `\${${v}}`,
-            kind: monaco.languages.CompletionItemKind.Variable,
-            insertText: `\${${v}}`,
-            range,
-            detail: `Variable ${v}`,
-            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          } as unknown as Monaco.languages.CompletionItem));
+          const suggestions: Monaco.languages.CompletionItem[] = variables.map(
+            (v) =>
+              ({
+                label: `\${${v}}`,
+                kind: monaco.languages.CompletionItemKind.Variable,
+                insertText: `\${${v}}`,
+                range,
+                detail: `Variable ${v}`,
+                insertTextRules:
+                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              }) as unknown as Monaco.languages.CompletionItem,
+          );
           return { suggestions };
         },
       },
@@ -300,10 +342,10 @@ ${`\${${v}}`}`,
     // Simple validation: detect '${' without a closing '}'
     const stack: number[] = [];
     for (let i = 0; i < text.length; i++) {
-      if (text[i] === '$' && text[i + 1] === '{') {
+      if (text[i] === "$" && text[i + 1] === "{") {
         stack.push(i);
       }
-      if (text[i] === '}') {
+      if (text[i] === "}") {
         stack.pop();
       }
     }
@@ -382,7 +424,15 @@ ${`\${${v}}`}`,
         key={snippet.id}
         variant="outlined"
         onClick={() => handleSelect(snippet)}
-        sx={{ p: 1, display: "flex", alignItems: "center", gap: 2, cursor: "pointer", borderColor: selectedId === snippet.id ? 'primary.main' : undefined, bgcolor: selectedId === snippet.id ? 'action.hover' : undefined }}
+        sx={{
+          p: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          cursor: "pointer",
+          borderColor: selectedId === snippet.id ? "primary.main" : undefined,
+          bgcolor: selectedId === snippet.id ? "action.hover" : undefined,
+        }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="subtitle2" noWrap>
@@ -408,29 +458,81 @@ ${`\${${v}}`}`,
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 2fr" }, gap: 2 }}>
-        <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }} elevation={2}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 2fr" },
+          gap: 2,
+        }}
+      >
+        <Paper
+          sx={{ p: 2, display: "flex", flexDirection: "column", gap: 1 }}
+          elevation={2}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <Typography variant="h6">Snippets ({snippetLanguage})</Typography>
-            <Button variant="contained" size="small" onClick={addSnippet}>Add</Button>
+            <Button variant="contained" size="small" onClick={addSnippet}>
+              Add
+            </Button>
           </Box>
           <Divider sx={{ my: 1 }} />
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 520, overflow: 'auto' }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              maxHeight: 520,
+              overflow: "auto",
+            }}
+          >
             {storedSnippets.length === 0 ? (
-              <Typography variant="body2" sx={{ opacity: 0.7 }}>No snippets yet.</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.7 }}>
+                No snippets yet.
+              </Typography>
             ) : (
               storedSnippets.map(renderSnippetRow)
             )}
           </Box>
         </Paper>
 
-        <Paper sx={{ p: 2, height: 520, display: 'flex', flexDirection: 'column', gap: 1 }} elevation={2}>
+        <Paper
+          sx={{
+            p: 2,
+            height: 520,
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+          }}
+          elevation={2}
+        >
           <Typography variant="h6">Editor</Typography>
           {selectedId ? (
             <>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1 }}>
-                <TextField label="Label" value={labelDraft} onChange={(e) => setLabelDraft(e.target.value)} size="small" />
-                <TextField label="Description" value={descDraft} onChange={(e) => setDescDraft(e.target.value)} size="small" />
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                  gap: 1,
+                }}
+              >
+                <TextField
+                  label="Label"
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  size="small"
+                />
+                <TextField
+                  label="Description"
+                  value={descDraft}
+                  onChange={(e) => setDescDraft(e.target.value)}
+                  size="small"
+                />
               </Box>
               <Box sx={{ flex: 1, minHeight: 0 }}>
                 <Editor
@@ -445,11 +547,13 @@ ${`\${${v}}`}`,
                 />
               </Box>
               <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                {isSaving ? 'Saving…' : 'Saved'}
+                {isSaving ? "Saving…" : "Saved"}
               </Typography>
             </>
           ) : (
-            <Typography variant="body2" sx={{ opacity: 0.7, mt: 2 }}>Select a snippet to edit, or click Add.</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.7, mt: 2 }}>
+              Select a snippet to edit, or click Add.
+            </Typography>
           )}
         </Paper>
       </Box>
