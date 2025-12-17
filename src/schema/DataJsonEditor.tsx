@@ -26,7 +26,12 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
 
   const [text, setText] = useState<string>(JSON.stringify(value, null, 2));
   const [error, setError] = useState<string | null>(null);
-  // Track when Monaco is ready so effects can (re)register providers safely
+
+  /*
+    Track when Monaco is ready so effects can (re)register providers safely
+    Otherwise, we end up with multiple snippets and what not getting "added" which clutters
+    the autocompletion results
+   */
   const [isMonacoReady, setIsMonacoReady] = useState(false);
 
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -114,6 +119,9 @@ export default function DataJsonEditor(props: DataJsonEditorProps) {
     );
   }
 
+  /*
+    Looks weird, but tried making sure typescript understood this fulfills the OnMount delegate
+   */
   const handleMount: OnMount = function onMount(editor, monacoIn) {
     editorRef.current = editor;
     const monaco = monacoIn as unknown as typeof Monaco;

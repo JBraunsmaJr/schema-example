@@ -17,6 +17,14 @@ interface SnippetEditorProps {
   snippetLanguage: string;
 }
 
+/*
+ * Some lessons learned.
+ *
+ * Anywhere Monaco returns a "disposable" we should maintain a reference to that.
+ * On re-render, we must "dispose" of an active reference to prevent issues where we continuously
+ * append/add things (as if it was a first-time initialization)
+ */
+
 export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
   const [saved, setSaved] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -240,11 +248,9 @@ export default function SnippetEditor({ snippetLanguage }: SnippetEditorProps) {
               detail: "Named placeholder",
             },
             ...(variables.map((v) => ({
-              label: `
-${`\${${v}}`}`,
+              label: `${`\${${v}}`}`,
               kind: monaco.languages.CompletionItemKind.Variable,
-              insertText: `
-${`\${${v}}`}`,
+              insertText: `${`\${${v}}`}`,
               range,
               detail: `Variable ${v}`,
             })) as unknown as Monaco.languages.CompletionItem[]),
@@ -315,12 +321,15 @@ ${`\${${v}}`}`,
     [snippetLanguage],
   );
 
+  /*
+    Weirdly done but tried leveraging the type-safety from monaco itself
+    where it has an OnMount type.
+   */
   const handleDidMount: OnMount = function onMount(editor, monaco) {
     editorRef.current =
       editor as unknown as Monaco.editor.IStandaloneCodeEditor;
     monacoRef.current = monaco as unknown as typeof Monaco;
 
-    // We only need snippet body language/registrations here
     registerSnippets(monacoRef.current);
 
     editor.updateOptions({
@@ -330,54 +339,6 @@ ${`\${${v}}`}`,
       quickSuggestions: { other: true, comments: true, strings: true },
     });
   };
-
-  function validateBodyAndMark() {
-    const monaco = monacoRef.current;
-    const editor = editorRef.current;
-    if (!monaco || !editor) return;
-    const model = editor.getModel();
-    if (!model) return;
-    const text = bodyDraft;
-    const markers: Monaco.editor.IMarkerData[] = [] as any;
-    // Simple validation: detect '${' without a closing '}'
-    const stack: number[] = [];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === "$" && text[i + 1] === "{") {
-        stack.push(i);
-      }
-      if (text[i] === "}") {
-        stack.pop();
-      }
-    }
-    if (stack.length > 0) {
-      const idx = stack[stack.length - 1];
-      const pos = model.getPositionAt(idx);
-      markers.push({
-        severity: 4, // Warning
-        message: "Unclosed placeholder: missing '}'",
-        startLineNumber: pos.lineNumber,
-        startColumn: pos.column,
-        endLineNumber: pos.lineNumber,
-        endColumn: pos.column + 2,
-      } as any);
-    }
-    // Invalid negative indices like $-1
-    const negIdx = /\$-\d+/g;
-    let m: RegExpExecArray | null;
-    while ((m = negIdx.exec(text))) {
-      const start = m.index;
-      const pos = model.getPositionAt(start);
-      markers.push({
-        severity: 4,
-        message: "Tab stop index must be a non-negative integer",
-        startLineNumber: pos.lineNumber,
-        startColumn: pos.column,
-        endLineNumber: pos.lineNumber,
-        endColumn: pos.column + m[0].length,
-      } as any);
-    }
-    monaco.editor.setModelMarkers(model, diagOwnerRef.current, markers);
-  }
 
   // Debounce save of drafts into selected snippet
   useEffect(
@@ -400,7 +361,6 @@ ${`\${${v}}`}`,
           persist(next);
         }
         setIsSaving(false);
-        validateBodyAndMark();
       }, 500);
       return () => {
         if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
@@ -414,8 +374,6 @@ ${`\${${v}}`}`,
     setLabelDraft(snippet.label);
     setDescDraft(snippet.description);
     setBodyDraft(snippet.insertText);
-    // Validate newly loaded content
-    setTimeout(validateBodyAndMark, 0);
   }
 
   function renderSnippetRow(snippet: Snippet) {

@@ -1,8 +1,5 @@
 import { type JsonSchema, type SchemaField } from "./types";
 
-// Minimal validator used to evaluate `if` conditions.
-// Supports: type, required, properties with nested const/enum checks, and simple primitives.
-
 /**
  * Used to validate 'if' conditions
  * @param schema
@@ -73,10 +70,6 @@ export function isValidAgainst(schema: SchemaField, data: unknown): boolean {
   return true;
 }
 
-// Deep merge that overlays `overlay` onto `base`.
-// - properties: take base + overlay keys; recursively merge values
-// - required: union
-// - other simple fields: overlay wins
 /**
  * Deep merge which 'overlays' onto 'base'
  * Properties: take base + overlay keys; Recursively merge values
@@ -128,7 +121,6 @@ export function mergeSchemas(
   return out;
 }
 
-// Compute the effective schema for a node given current data by applying if/then/else
 /**
  * Compute effective schema for a node given current data by applying if/then/else
  * @param node

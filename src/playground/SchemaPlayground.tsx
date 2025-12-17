@@ -351,6 +351,10 @@ export default function SchemaPlayground() {
     };
 
     updateHighlightFromCursor();
+
+    /*
+      Disposables that we want to maintain references of to prevent continuously adding
+     */
     const disp1 = editor.onDidChangeCursorPosition(updateHighlightFromCursor);
     const disp2 = editor.onDidChangeModelContent(updateHighlightFromCursor);
 
@@ -394,8 +398,11 @@ export default function SchemaPlayground() {
       const text = model.getValue();
       const root = parseTree(text);
       if (!root) return;
-      // Build JSON path like ['properties','user','properties','profile']
-      // For array indices in the form path (e.g., projects.0.name) map index -> 'items'
+
+      /*
+        Build JSON path like ['properties','user','properties','profile']
+        For array indices in the form path (e.g., projects.0.name) map index -> 'items'
+       */
       const segs = highlightPath.split(".").filter(Boolean);
       const jsonPath: (string | number)[] = [];
       for (const s of segs) {

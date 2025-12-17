@@ -94,7 +94,6 @@ export function ArtifactsProvider({ children }: { children: React.ReactNode }) {
       const node = map.get(artifactId);
       if (!node) return prev;
       node.tags = updater([...(node.tags || [])]);
-      // persist tags of all nodes
       const tagsPersist: Record<string, string[]> = {};
       for (const [id, n] of map.entries()) {
         if (n.tags && n.tags.length) tagsPersist[id] = [...n.tags];
