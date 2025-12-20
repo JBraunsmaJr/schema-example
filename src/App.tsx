@@ -5,7 +5,6 @@ import {
   Container,
   Typography,
   CssBaseline,
-  ThemeProvider,
   createTheme,
   FormControl,
   InputLabel,
@@ -19,6 +18,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   type SelectChangeEvent,
+  IconButton,
 } from "@mui/material";
 import testSchema from "./test-schema.json";
 import { DynamicForm } from "./schema/DynamicForm";
@@ -29,6 +29,11 @@ import { ArtifactsTagsView } from "./artifacts/ArtifactsTagsView";
 import SchemaPlayground from "./playground/SchemaPlayground";
 import SnippetEditor from "./snippet/SnippetEditor";
 import DataJsonEditor from "./schema/DataJsonEditor";
+import {
+  ThemeConfigProvider,
+  ThemeCustomizationModal,
+} from "./theming/ThemeModal.tsx";
+import { ColorizeRounded } from "@mui/icons-material";
 
 interface TopbarProps {
   view:
@@ -43,6 +48,7 @@ interface TopbarProps {
   handleViewChange: (e: unknown, val: TopbarProps["view"] | null) => void;
   handleModeChange: (e: SelectChangeEvent) => void;
   title: string;
+  setModalOpen: (open: boolean) => void;
 }
 
 function Topbar({
@@ -51,6 +57,7 @@ function Topbar({
   mode,
   handleModeChange,
   title,
+  setModalOpen,
 }: TopbarProps) {
   return (
     <Box
@@ -80,6 +87,9 @@ function Topbar({
           <ToggleButton value="playground">Playground</ToggleButton>
           <ToggleButton value="snippets">Snippets</ToggleButton>
         </ToggleButtonGroup>
+        <IconButton onClick={() => setModalOpen(true)} color={"primary"}>
+          <ColorizeRounded />
+        </IconButton>
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="theme-mode-label">Theme</InputLabel>
           <Select
@@ -108,6 +118,8 @@ function App() {
     | "playground"
     | "snippets";
   const [view, setView] = useState<ViewMode>("form");
+  const [modalOpen, setModalOpen] = useState(false);
+
   type Mode = "light" | "dark" | "system";
   function initMode(): Mode {
     return (localStorage.getItem("themeMode") as Mode) || "system";
@@ -142,39 +154,6 @@ function App() {
       localStorage.setItem("themeMode", mode);
     },
     [mode],
-  );
-
-  const theme = useMemo(
-    function () {
-      return createTheme({
-        palette: {
-          mode: resolvedPaletteMode,
-          primary: {
-            main: resolvedPaletteMode === "dark" ? "#8ab4f8" : "#1a73e8",
-          },
-          secondary: {
-            main: resolvedPaletteMode === "dark" ? "#f2a7c2" : "#ad1457",
-          },
-          ...(resolvedPaletteMode === "dark"
-            ? {
-                background: {
-                  default: "#0b0f14",
-                  paper: "#0f1520",
-                },
-              }
-            : {}),
-        },
-        components: {
-          MuiPaper: { styleOverrides: { root: { borderRadius: 12 } } },
-          MuiAccordion: {
-            styleOverrides: {
-              root: { borderRadius: 12, backgroundImage: "none" },
-            },
-          },
-        },
-      });
-    },
-    [resolvedPaletteMode],
   );
 
   // Build a Table of Contents that reflects what currently exists/is filled in the form
@@ -363,7 +342,11 @@ function App() {
   // No ERD export handle (feature removed)
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeConfigProvider>
+      <ThemeCustomizationModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+      />
       <CssBaseline />
       {view === "form" ? (
         <Container maxWidth="xl">
@@ -404,6 +387,7 @@ function App() {
             <Box>
               <Topbar
                 view={view}
+                setModalOpen={setModalOpen}
                 mode={mode}
                 handleViewChange={handleViewChange}
                 handleModeChange={handleModeChange}
@@ -451,6 +435,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"JSON Editor"}
@@ -562,7 +547,7 @@ function App() {
           </Box>
         </Container>
       )}
-    </ThemeProvider>
+    </ThemeConfigProvider>
   );
 }
 
