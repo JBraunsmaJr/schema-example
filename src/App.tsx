@@ -5,7 +5,6 @@ import {
   Container,
   Typography,
   CssBaseline,
-  createTheme,
   FormControl,
   InputLabel,
   Select,
@@ -125,30 +124,6 @@ function App() {
     return (localStorage.getItem("themeMode") as Mode) || "system";
   }
   const [mode, setMode] = useState<Mode>(initMode);
-  const prefersDark =
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-  useEffect(function () {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    function incTick(t: number) {
-      return t + 1;
-    }
-    function listener() {
-      forceUpdateTick(incTick);
-    }
-    mql.addEventListener?.("change", listener);
-    return function cleanup() {
-      mql.removeEventListener?.("change", listener);
-    };
-  }, []);
-  const [tick, forceUpdateTick] = useState(0); // trigger re-eval on system change
-  const resolvedPaletteMode = useMemo<"light" | "dark">(
-    function () {
-      if (mode === "system") return prefersDark ? "dark" : "light";
-      return mode;
-    },
-    [mode, prefersDark, tick],
-  );
   useEffect(
     function () {
       localStorage.setItem("themeMode", mode);
@@ -457,6 +432,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"Schema Playground"}
@@ -472,6 +448,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"Snippet Editor"}
@@ -498,6 +475,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"Entity Relationship Diagram"}
@@ -522,6 +500,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"Artifacts"}
@@ -537,6 +516,7 @@ function App() {
             <Topbar
               view={view}
               mode={mode}
+              setModalOpen={setModalOpen}
               handleViewChange={handleViewChange}
               handleModeChange={handleModeChange}
               title={"Artifacts"}

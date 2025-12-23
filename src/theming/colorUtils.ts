@@ -140,17 +140,6 @@ function getContrastRatio(color1: HSL, color2: HSL): number {
     return (lighter + 0.05) / (darker + 0.05);
 }
 
-/**
- * Check if the color meets WCAG contrast standards.
- * @param textColor
- * @param bgColor
- * @param level WCAG contrast level. Defaults to AA.
- * @returns True if the color meets WCAG contrast standards.
- */
-function meetsWCAGStandard(textColor: HSL, bgColor: HSL, level: 'AA' | 'AAA' = 'AA'): boolean {
-    const ratio = getContrastRatio(textColor, bgColor);
-    return level === 'AA' ? ratio >= 4.5 : ratio >= 7;
-}
 
 /**
  * Adjust the color to meet WCAG contrast standards.
@@ -239,30 +228,6 @@ export function generateBackgrounds(primaryColor: HSL, mode: "light" | "dark") {
 }
 
 * */
-function hslToHex(color: HSL): string {
-    const h = color.h
-    let s = color.s / 100
-    let l = color.l / 100
-
-    const c = (1 - Math.abs(2 * l - 1)) * s
-    const x = c * (1 - Math.abs((h/60) % 2 - 1))
-    const m = l - c / 2
-
-    let r = 0, g = 0, b = 0;
-    if (h < 60) { r = c; g = x; b = 0; }
-    else if (h < 120) { r = x; g = c; b = 0; }
-    else if (h < 180) { r = 0; g = c; b = x; }
-    else if (h < 240) { r = 0; g = x; b = c; }
-    else if (h < 300) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
-
-    function toHex(n: number) {
-        const hex = Math.round((n + m) * 255).toString(16)
-        return hex.length === 1 ? "0" + hex : hex
-    }
-
-    return `${toHex(r)}${toHex(g)}${toHex(b)}`
-}
 /*
 
 function generatePalette(color: HSL, mode: "light" | "dark") {

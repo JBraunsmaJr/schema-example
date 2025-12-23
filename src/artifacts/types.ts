@@ -13,6 +13,7 @@ export interface ArtifactFolder extends ArtifactBase {
 
 export interface ArtifactFile extends ArtifactBase {
   type: "file";
+  content?: string;
 }
 
 export type Artifact = ArtifactFolder | ArtifactFile;
