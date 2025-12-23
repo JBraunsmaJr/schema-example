@@ -64,11 +64,11 @@ export function createHSLTheme({
       background: generateBackgrounds(bgBase),
       text: {
         primary: isLight
-          ? hslToString(adjustLightness(bgBase, -80))
-          : hslToString(adjustLightness(bgBase, 80)),
+          ? hslToString(adjustLightness(ensureVibrantColor(bgBase), -80))
+          : hslToString(adjustLightness(ensureVibrantColor(bgBase), 80)),
         secondary: isLight
-          ? hslToString(adjustLightness(bgBase, -60))
-          : hslToString(adjustLightness(bgBase, 60)),
+          ? hslToString(adjustLightness(ensureVibrantColor(bgBase), -60))
+          : hslToString(adjustLightness(ensureVibrantColor(bgBase), 60)),
       },
     },
   };
