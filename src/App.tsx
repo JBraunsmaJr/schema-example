@@ -28,6 +28,7 @@ import { ArtifactsTagsView } from "./artifacts/ArtifactsTagsView";
 import SchemaPlayground from "./playground/SchemaPlayground";
 import SnippetEditor from "./snippet/SnippetEditor";
 import DataJsonEditor from "./schema/DataJsonEditor";
+import DiffEditor from "./diff/DiffEditor";
 import {
   ThemeConfigProvider,
   ThemeCustomizationModal,
@@ -42,7 +43,8 @@ interface TopbarProps {
     | "artifacts-tree"
     | "artifacts-tags"
     | "playground"
-    | "snippets";
+    | "snippets"
+    | "diff";
   mode: "system" | "light" | "dark";
   handleViewChange: (e: unknown, val: TopbarProps["view"] | null) => void;
   handleModeChange: (e: SelectChangeEvent) => void;
@@ -85,6 +87,7 @@ function Topbar({
           <ToggleButton value="artifacts-tags">Artifacts Tags</ToggleButton>
           <ToggleButton value="playground">Playground</ToggleButton>
           <ToggleButton value="snippets">Snippets</ToggleButton>
+          <ToggleButton value="diff">Diff</ToggleButton>
         </ToggleButtonGroup>
         <IconButton onClick={() => setModalOpen(true)} color={"primary"}>
           <ColorizeRounded />
@@ -115,7 +118,8 @@ function App() {
     | "artifacts-tree"
     | "artifacts-tags"
     | "playground"
-    | "snippets";
+    | "snippets"
+    | "diff";
   const [view, setView] = useState<ViewMode>("form");
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -422,6 +426,42 @@ function App() {
                 schema={testSchema as unknown as JsonSchema}
                 snippetLanguage="json"
                 title="Edit Data as JSON"
+              />
+            </Paper>
+          </Box>
+        </Container>
+      ) : view === "diff" ? (
+        <Container maxWidth="xl">
+          <Box sx={{ my: 4 }}>
+            <Topbar
+              view={view}
+              mode={mode}
+              setModalOpen={setModalOpen}
+              handleViewChange={handleViewChange}
+              handleModeChange={handleModeChange}
+              title={"Diff Editor"}
+            />
+            <Paper sx={{ p: 2, height: "70vh" }}>
+              <DiffEditor
+                theme={mode}
+                original={{
+                  name: "My Application",
+                  version: "1.0.0",
+                  description: "Original description",
+                  settings: {
+                    enabled: true,
+                    theme: "light",
+                  },
+                }}
+                modified={{
+                  name: "My Application",
+                  version: "1.1.0",
+                  description: "Updated description",
+                  settings: {
+                    enabled: false,
+                    theme: "dark",
+                  },
+                }}
               />
             </Paper>
           </Box>
